@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/fidpa/hablara/releases)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/fidpa/hablara/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
@@ -641,7 +641,7 @@ Hablará unterstützt 3 gleichwertige LLM-Anbieter - wähle nach deinen Präfere
 **Noch nicht**. Aktuell nur macOS. Windows/Linux geplant.
 
 ### Wie groß ist das Ollama-Model?
-**6 GB** (qwen2.5:7b). Kleinere Alternative: qwen2.5:3b (2 GB).
+**6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
 
 ### Ist Hablará Production-Ready?
 **Ja** – Version 1.0.1 ist bereit für Evaluation. Core-Features vollständig, macOS-optimiert.
@@ -726,4 +726,4 @@ Kein LLM-Anbieter konfiguriert.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.1 | **Stand:** 2026-02-01
+**Autor:** Marc Allgeier | **Version:** 1.0.2 | **Stand:** 2026-02-01

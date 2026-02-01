@@ -29,6 +29,7 @@ import { logFailedAnalyses, handleTopicClassification, buildAnalysisStatus } fro
 import { fuseEmotions, fuseTones } from "./fusion";
 import { analyzeAudioEmotion } from "./audio-emotion";
 import { shouldAnalyzeFallacies, type AnalysisOptions, type UnifiedAnalysisOptions } from "./types";
+import { logger } from "../logger";
 
 // Full analysis pipeline
 export class AnalysisPipeline {
@@ -260,11 +261,34 @@ export class AnalysisPipeline {
       abortSignal,
     });
 
+    // P2 Investigation: Debug logging for UI inconsistency investigation
+    // TODO: Remove after investigation complete
+    logger.debug('AnalysisPipeline', 'Fusion inputs', {
+      audioEmotion: {
+        primary: this.lastAudioEmotion.primary,
+        confidence: this.lastAudioEmotion.confidence,
+        secondary: this.lastAudioEmotion.secondary,
+      },
+      textEmotion: {
+        primary: textEmotion?.primary,
+        confidence: textEmotion?.confidence,
+      },
+      detectionMode: this.settings.audio.emotionDetectionMode,
+    });
+
     const fusedEmotion = fuseEmotions(
       this.lastAudioEmotion,
       textEmotion,
       this.settings.audio.emotionDetectionMode
     );
+
+    // P2 Investigation: Log fusion result
+    logger.debug('AnalysisPipeline', 'Fusion result', {
+      fusedPrimary: fusedEmotion.primary,
+      fusedConfidence: fusedEmotion.confidence,
+      fusedSecondary: fusedEmotion.secondary,
+      hasBlendedCoordinates: !!fusedEmotion.blendedCoordinates,
+    });
 
     const fusedTone = textTone
       ? fuseTones(

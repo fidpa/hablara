@@ -664,6 +664,76 @@ describe('analysis.ts - Core Analysis Logic', () => {
     });
   });
 
+  describe('calculateBlendRatio - Real-World Scenarios (52/48 NOT a Bug)', () => {
+    /**
+     * These tests document expected behavior where typical Audio/Text confidences
+     * produce blend ratios around 48-49%. This is mathematically CORRECT.
+     *
+     * FAQ: Why does the UI often show 52/48 or 51/49?
+     * Answer: With typical Audio confidence (~0.72 from Rust EmotionClassifier)
+     * and Text confidence (~0.68 from LLM), the formula produces:
+     *   ratio = 0.68 / (0.72 + 0.68) = 0.486 ≈ 49%
+     * The UI rounds to 51/49 or 52/48 - this is EXPECTED behavior.
+     */
+
+    it('should produce ~48% ratio with typical Audio/Text confidences (NOT a bug)', () => {
+      // Typical scenario: Audio 0.72 (Rust EmotionClassifier), Text 0.68 (LLM)
+      const ratio = calculateBlendRatio(0.72, 0.68);
+
+      // Expected: 0.68 / (0.72 + 0.68) = 0.68 / 1.40 ≈ 0.486
+      expect(ratio).toBeCloseTo(0.486, 2);
+
+      // UI would show: Primary 51%, Secondary 49% - this is CORRECT
+      const primaryPercent = Math.round((1 - ratio) * 100);
+      const secondaryPercent = Math.round(ratio * 100);
+      expect(primaryPercent).toBe(51);
+      expect(secondaryPercent).toBe(49);
+
+      // Sum should equal 100%
+      expect(primaryPercent + secondaryPercent).toBe(100);
+    });
+
+    it('should show variation across different confidence combinations', () => {
+      // Verify that different inputs produce different outputs
+      const ratios = [
+        calculateBlendRatio(0.9, 0.5),   // Dominant primary: 0.357
+        calculateBlendRatio(0.7, 0.6),   // Balanced: 0.462
+        calculateBlendRatio(0.6, 0.55),  // Very close: 0.478
+      ];
+
+      // All should be different values
+      expect(new Set(ratios.map(r => r.toFixed(3))).size).toBe(3);
+
+      // Verify expected ranges
+      expect(ratios[0]).toBeCloseTo(0.357, 2);  // Dominant primary
+      expect(ratios[1]).toBeCloseTo(0.462, 2);  // Balanced
+      expect(ratios[2]).toBeCloseTo(0.478, 2);  // Very close
+    });
+
+    it('should produce ~46% for Audio-favoring confidences (0.8/0.7)', () => {
+      // Audio-favoring: Higher audio confidence
+      const ratio = calculateBlendRatio(0.8, 0.7);
+
+      // Expected: 0.7 / 1.5 ≈ 0.467
+      expect(ratio).toBeCloseTo(0.467, 2);
+
+      // UI shows: 53/47 - still close to 50/50 but audio-favored
+      expect(Math.round((1 - ratio) * 100)).toBe(53);
+    });
+
+    it('should produce 50% cap even for text-dominant confidences', () => {
+      // Text-dominant: Much higher text confidence
+      const ratio = calculateBlendRatio(0.5, 0.9);
+
+      // Raw would be 0.9 / 1.4 ≈ 0.643, but CAPPED at 0.5
+      expect(ratio).toBe(0.5);
+
+      // UI shows exactly 50/50 due to cap
+      expect(Math.round((1 - ratio) * 100)).toBe(50);
+      expect(Math.round(ratio * 100)).toBe(50);
+    });
+  });
+
   describe('calculateBlendedCoordinates', () => {
     it('should interpolate correctly with 50% blend', () => {
       // joy: {valence: 0.9, arousal: 0.7}, stress: {valence: -0.5, arousal: 0.8}

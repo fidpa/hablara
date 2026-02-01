@@ -42,6 +42,9 @@ readonly PROJECT_ROOT
 readonly CARGO_TOML="$PROJECT_ROOT/src-tauri/Cargo.toml"
 readonly TAURI_CONF="$PROJECT_ROOT/src-tauri/tauri.conf.json"
 readonly PACKAGE_JSON="$PROJECT_ROOT/package.json"
+readonly TYPES_TS="$PROJECT_ROOT/src/lib/types.ts"
+readonly README_MD="$PROJECT_ROOT/README.md"
+readonly CLAUDE_MD="$PROJECT_ROOT/CLAUDE.md"
 
 # Colors
 readonly RED='\033[0;31m'
@@ -158,6 +161,41 @@ set_version_json() {
     fi
 }
 
+set_version_types_ts() {
+    local file="$1"
+    local version="$2"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        sed -i '' "s/APP_VERSION = \"[^\"]*\"/APP_VERSION = \"$version\"/" "$file"
+    else
+        sed -i "s/APP_VERSION = \"[^\"]*\"/APP_VERSION = \"$version\"/" "$file"
+    fi
+}
+
+set_version_readme_badge() {
+    local file="$1"
+    local version="$2"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # Update shield.io badge: version-X.Y.Z-blue
+        sed -i '' "s/version-[0-9][0-9.]*-blue/version-$version-blue/g" "$file"
+    else
+        sed -i "s/version-[0-9][0-9.]*-blue/version-$version-blue/g" "$file"
+    fi
+}
+
+set_version_claude_md() {
+    local file="$1"
+    local version="$2"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # Update "**Version:** X.Y.Z" pattern
+        sed -i '' "s/\*\*Version:\*\* [0-9][0-9.]*/\*\*Version:\*\* $version/g" "$file"
+        # Update "v1.0.0" in header (Hablará v1.0.0)
+        sed -i '' "s/Hablará v[0-9][0-9.]*/Hablará v$version/g" "$file"
+    else
+        sed -i "s/\*\*Version:\*\* [0-9][0-9.]*/\*\*Version:\*\* $version/g" "$file"
+        sed -i "s/Hablará v[0-9][0-9.]*/Hablará v$version/g" "$file"
+    fi
+}
+
 # -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
@@ -229,13 +267,21 @@ if [[ "$DEPS_OK" == "false" ]]; then
     exit 1
 fi
 
-# Check git status
-if [[ -n "$(git -C "$PROJECT_ROOT" status --porcelain)" ]]; then
-    log_error "Git working directory not clean"
-    log_info "Commit or stash changes first: git status"
-    exit 2
+# Check git status - uncommitted changes will be included in version bump commit
+UNCOMMITTED_CHANGES=$(git -C "$PROJECT_ROOT" status --porcelain)
+if [[ -n "$UNCOMMITTED_CHANGES" ]]; then
+    log_warn "Uncommitted changes detected - will be included in version bump commit"
+    log_info "Changed files:"
+    echo "$UNCOMMITTED_CHANGES" | head -10 | while read -r line; do
+        log_info "  $line"
+    done
+    CHANGE_COUNT=$(echo "$UNCOMMITTED_CHANGES" | wc -l | tr -d ' ')
+    if [[ "$CHANGE_COUNT" -gt 10 ]]; then
+        log_info "  ... and $((CHANGE_COUNT - 10)) more files"
+    fi
+else
+    log_success "Git working directory clean"
 fi
-log_success "Git working directory clean"
 
 # Check branch (warning only)
 CURRENT_BRANCH=$(git -C "$PROJECT_ROOT" branch --show-current)
@@ -281,41 +327,33 @@ log_success "All versions synchronized: $CURRENT_NPM"
 
 log_step "Calculating new version ($BUMP_TYPE)"
 
-# Use npm version --dry-run to calculate (without changing files)
-cd "$PROJECT_ROOT"
-NEW_VERSION=$(npm version "$BUMP_TYPE" --no-git-tag-version --json 2>/dev/null | grep -o '"[0-9][^"]*"' | tr -d '"' || true)
+# Calculate new version WITHOUT side effects (pure calculation)
+# DO NOT use `npm version` here as it modifies package.json
+IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_NPM%-*}"
+PRERELEASE="${CURRENT_NPM#*-}"
+[[ "$PRERELEASE" == "$CURRENT_NPM" ]] && PRERELEASE=""
 
-# Fallback: manual calculation if npm version fails
-if [[ -z "$NEW_VERSION" ]]; then
-    IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT_NPM%-*}"
-    PRERELEASE="${CURRENT_NPM#*-}"
-    [[ "$PRERELEASE" == "$CURRENT_NPM" ]] && PRERELEASE=""
-
-    case "$BUMP_TYPE" in
-        patch)
-            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
-            ;;
-        minor)
-            NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
-            ;;
-        major)
-            NEW_VERSION="$((MAJOR + 1)).0.0"
-            ;;
-        prerelease)
-            if [[ -n "$PRERELEASE" ]]; then
-                # Increment prerelease number
-                PRE_NUM="${PRERELEASE##*.}"
-                PRE_TAG="${PRERELEASE%.*}"
-                NEW_VERSION="$MAJOR.$MINOR.$PATCH-$PRE_TAG.$((PRE_NUM + 1))"
-            else
-                NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))-alpha.0"
-            fi
-            ;;
-    esac
-else
-    # npm version already bumped package.json, revert it for dry-run consistency
-    git -C "$PROJECT_ROOT" checkout -- package.json package-lock.json 2>/dev/null || true
-fi
+case "$BUMP_TYPE" in
+    patch)
+        NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+        ;;
+    minor)
+        NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+        ;;
+    major)
+        NEW_VERSION="$((MAJOR + 1)).0.0"
+        ;;
+    prerelease)
+        if [[ -n "$PRERELEASE" ]]; then
+            # Increment prerelease number
+            PRE_NUM="${PRERELEASE##*.}"
+            PRE_TAG="${PRERELEASE%.*}"
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH-$PRE_TAG.$((PRE_NUM + 1))"
+        else
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))-alpha.0"
+        fi
+        ;;
+esac
 
 log_info "Current: $CURRENT_NPM"
 log_info "New:     $NEW_VERSION"
@@ -333,16 +371,30 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo ""
     echo "Would bump: $CURRENT_NPM -> $NEW_VERSION"
     echo ""
-    echo "Files that would be modified:"
+    echo "Version files that would be modified:"
     echo "  - package.json"
     echo "  - package-lock.json"
     echo "  - src-tauri/Cargo.toml"
     echo "  - src-tauri/Cargo.lock"
     echo "  - src-tauri/tauri.conf.json"
+    echo "  - src/lib/types.ts (APP_VERSION)"
+    echo "  - README.md (badge)"
+    echo "  - CLAUDE.md (version references)"
+    if [[ -n "$UNCOMMITTED_CHANGES" ]]; then
+        echo ""
+        echo -e "${YELLOW}Uncommitted changes that would be included:${NC}"
+        echo "$UNCOMMITTED_CHANGES" | while read -r line; do
+            echo "  $line"
+        done
+    fi
     echo ""
     echo "Git operations that would be performed:"
-    echo "  - git add <files>"
-    echo "  - git commit -m \"chore: bump version to v$NEW_VERSION\""
+    echo "  - git add -A (all changes)"
+    if [[ -n "$UNCOMMITTED_CHANGES" ]]; then
+        echo "  - git commit -m \"chore: release v$NEW_VERSION\""
+    else
+        echo "  - git commit -m \"chore: bump version to v$NEW_VERSION\""
+    fi
     echo "  - git tag \"v$NEW_VERSION\""
     echo ""
     echo "Run without --dry-run to apply changes."
@@ -379,10 +431,14 @@ fi
 
 log_step "Applying version bump"
 
-# 1. Bump package.json (npm does this + package-lock.json)
+# 1. Update package.json (using calculated version)
 log_info "Updating package.json..."
 cd "$PROJECT_ROOT"
-npm version "$BUMP_TYPE" --no-git-tag-version >/dev/null
+set_version_json "$PACKAGE_JSON" "$NEW_VERSION"
+# Also update package-lock.json if it exists
+if [[ -f "$PROJECT_ROOT/package-lock.json" ]]; then
+    set_version_json "$PROJECT_ROOT/package-lock.json" "$NEW_VERSION"
+fi
 log_success "package.json: $NEW_VERSION"
 
 # 2. Sync Cargo.toml
@@ -395,7 +451,30 @@ log_info "Updating tauri.conf.json..."
 set_version_json "$TAURI_CONF" "$NEW_VERSION"
 log_success "tauri.conf.json: $NEW_VERSION"
 
-# 4. Update Cargo.lock
+# 4. Sync types.ts (APP_VERSION constant)
+log_info "Updating types.ts..."
+set_version_types_ts "$TYPES_TS" "$NEW_VERSION"
+log_success "types.ts: APP_VERSION = \"$NEW_VERSION\""
+
+# 5. Sync README.md badge
+log_info "Updating README.md badge..."
+if grep -q "version-[0-9][0-9.]*-blue" "$README_MD"; then
+    set_version_readme_badge "$README_MD" "$NEW_VERSION"
+    log_success "README.md: badge updated"
+else
+    log_warn "README.md: no version badge found (skipped)"
+fi
+
+# 6. Sync CLAUDE.md version references
+log_info "Updating CLAUDE.md..."
+if grep -q "Version:" "$CLAUDE_MD"; then
+    set_version_claude_md "$CLAUDE_MD" "$NEW_VERSION"
+    log_success "CLAUDE.md: version references updated"
+else
+    log_warn "CLAUDE.md: no version references found (skipped)"
+fi
+
+# 7. Update Cargo.lock
 log_info "Updating Cargo.lock..."
 cargo generate-lockfile --manifest-path "$CARGO_TOML" 2>/dev/null || \
     cargo build --manifest-path "$CARGO_TOML" --quiet 2>/dev/null || true
@@ -432,15 +511,21 @@ log_step "Creating git commit and tag"
 
 cd "$PROJECT_ROOT"
 
-# Stage files
-git add package.json package-lock.json
-git add src-tauri/Cargo.toml src-tauri/Cargo.lock
-git add src-tauri/tauri.conf.json
+# Stage ALL changes (version files + any other uncommitted changes)
+log_info "Staging all changes..."
+git add -A
 
-# Commit
+# Commit with appropriate message
 log_info "Creating commit..."
-git commit -m "chore: bump version to v$NEW_VERSION"
-log_success "Commit created"
+if [[ -n "$UNCOMMITTED_CHANGES" ]]; then
+    # If there were uncommitted changes, use a release commit message
+    git commit -m "chore: release v$NEW_VERSION"
+    log_success "Commit created (includes all changes)"
+else
+    # Clean bump only
+    git commit -m "chore: bump version to v$NEW_VERSION"
+    log_success "Commit created"
+fi
 
 # Tag
 log_info "Creating tag..."
