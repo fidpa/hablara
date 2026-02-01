@@ -12,6 +12,7 @@
 !.yarn/releases
 !.yarn/versions
 .pnpm-store/
+package-lock.json
 
 # =============================================================================
 # Build Outputs
@@ -21,7 +22,6 @@
 /.next/
 /out/
 /build
-.next/
 
 # Tauri
 /src-tauri/target/
@@ -35,6 +35,52 @@ target/
 **/*.rs.bk
 Cargo.lock
 !src-tauri/Cargo.lock
+
+# =============================================================================
+# Testing & Coverage
+# =============================================================================
+/coverage
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+e2e-results/
+screenshots/
+videos/
+traces/
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+secrets/
+credentials.json
+
+# Development Overrides
+*.local.json
+local-config.json
+
+# =============================================================================
+# Logs & Debug
+# =============================================================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+logs/
+
+# Core Dumps (Rust/Native crashes)
+core
+*.core
+*.dmp
 
 # =============================================================================
 # ML Models (LARGE FILES - download separately)
@@ -65,6 +111,7 @@ Cargo.lock
 *.mlx
 *.npz
 mlx_models/
+/mlx_models/
 
 # HuggingFace cache
 .cache/huggingface/
@@ -74,10 +121,8 @@ huggingface/
 *.bin
 !yarn.lock.bin
 
-# Specific model directories (all ignored except public/models/)
-/src-tauri/models/      # Whisper models
-/mlx_models/            # MLX models
-models/                 # Catch-all for other models/ directories
+# Model directories
+models/
 checkpoints/
 
 # =============================================================================
@@ -116,54 +161,11 @@ env/
 .ruff_cache/
 
 # =============================================================================
-# Testing & Coverage
+# TypeScript
 # =============================================================================
-/coverage
-*.lcov
-.nyc_output/
-test-results/
-playwright-report/
-playwright/.cache/
-e2e-results/
-screenshots/
-videos/
-traces/
-
-# =============================================================================
-# Environment & Secrets
-# =============================================================================
-.env
-.env.*
-!.env.example
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-*.pem
-*.key
-*.cert
-secrets/
-credentials.json
-
-# Development Overrides
-*.local.json
-local-config.json
-
-# =============================================================================
-# Logs & Debug
-# =============================================================================
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-*.log
-logs/
-
-# Core Dumps (Rust/Native crashes)
-core
-*.core
-*.dmp
+*.tsbuildinfo
+next-env.d.ts
+tsconfig.tsbuildinfo
 
 # =============================================================================
 # IDE & Editor
@@ -195,25 +197,6 @@ Thumbs.db
 desktop.ini
 
 # =============================================================================
-# TypeScript
-# =============================================================================
-*.tsbuildinfo
-next-env.d.ts
-tsconfig.tsbuildinfo
-
-# =============================================================================
-# Vercel & Deployment
-# =============================================================================
-.vercel
-.netlify
-
-# =============================================================================
-# Symlinks & External References
-# =============================================================================
-/shared
-/server
-
-# =============================================================================
 # Temporary & Cache
 # =============================================================================
 *.tmp
@@ -235,18 +218,6 @@ tsconfig.tsbuildinfo
 *.rej
 
 # =============================================================================
-# macOS App Bundles (Tauri builds)
-# =============================================================================
-*.app/
-*.dmg
-*.pkg
-*.deb
-*.AppImage
-*.msi
-*.exe
-!scripts/*.sh
-
-# =============================================================================
 # Database & State
 # =============================================================================
 *.db
@@ -265,11 +236,34 @@ bench-output/
 flamegraph.svg
 
 # =============================================================================
+# Deployment
+# =============================================================================
+.vercel
+.netlify
+
+# =============================================================================
+# Symlinks & External References
+# =============================================================================
+/shared
+/server
+
+# =============================================================================
+# macOS App Bundles (Tauri builds)
+# =============================================================================
+*.app/
+*.dmg
+*.pkg
+*.deb
+*.AppImage
+*.msi
+*.exe
+!scripts/*.sh
+
+# =============================================================================
 # Personal & Sensitive Files
 # =============================================================================
 TESTER_EMAIL.md
 TESTER_EMAIL_PLAIN.txt
-package-lock.json
 
 # =============================================================================
 # Documentation (Claude Code)
@@ -277,3 +271,9 @@ package-lock.json
 CLAUDE.md
 .claude/
 docs/
+CleanShot.png
+
+# =============================================================================
+# Development Scripts (Private)
+# =============================================================================
+scripts-dev/

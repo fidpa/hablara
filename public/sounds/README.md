@@ -58,10 +58,10 @@ pnpm test src/__tests__/lib/audio-feedback.test.ts
 
 ```bash
 # Generate basic test sounds (requires ffmpeg)
-./scripts/generate-sounds.sh
+../scripts-dev/generate-sounds.sh
 
 # Download professional sounds (manual process)
-./scripts/download-professional-sounds.sh
+../scripts-dev/download-professional-sounds.sh
 ```
 
 **For production DMG builds, the Web Audio API implementation is used automatically.**

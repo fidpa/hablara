@@ -71,7 +71,7 @@ pub(crate) async fn transcribe_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts/mlx_transcribe.py"))
+        .map(|p| p.join("scripts-dev/mlx-transcribe.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {
@@ -82,7 +82,7 @@ pub(crate) async fn transcribe_mlx(
     }
 
     if !script_path.exists() {
-        return Err("mlx_transcribe.py script not found".to_string());
+        return Err("mlx-transcribe.py script not found".to_string());
     }
 
     // Create temp file for audio input
@@ -184,7 +184,7 @@ pub(crate) async fn check_mlx_whisper_status_impl(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts/mlx_transcribe.py"))
+        .map(|p| p.join("scripts-dev/mlx-transcribe.py"))
         .unwrap_or_default();
 
     // Check Python venv
@@ -208,7 +208,7 @@ pub(crate) async fn check_mlx_whisper_status_impl(
             python_path: Some(python_path.to_string_lossy().to_string()),
             script_path: None,
             models: vec![],
-            error: Some("mlx_transcribe.py script not found".to_string()),
+            error: Some("mlx-transcribe.py script not found".to_string()),
         });
     }
 

@@ -9,7 +9,8 @@
 # 4. Kopiert Binary und Model in src-tauri/
 # =============================================================================
 
-set -e  # Exit on error
+set -euo pipefail  # Exit on error, undefined vars, pipe failures
+IFS=$'\n\t'        # Safe word splitting
 
 # Colors for output
 RED='\033[0;31m'
@@ -60,6 +61,17 @@ log_info() {
 log_error() {
     echo -e "${RED}Error: $1${NC}"
 }
+
+# Cleanup function for error handling
+cleanup() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "Build failed - cleaning up partial artifacts"
+        [[ -d "$BUILD_DIR/build" ]] && rm -rf "$BUILD_DIR/build"
+    fi
+    exit $exit_code
+}
+trap cleanup EXIT INT TERM
 
 check_dependency() {
     if ! command -v "$1" &> /dev/null; then
@@ -145,7 +157,7 @@ else
     cmake -B build -DCMAKE_BUILD_TYPE=Release
 fi
 
-cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+cmake --build build --config Release -j"$(sysctl -n hw.ncpu)"
 
 # Verify build - binary is now in build/bin/
 WHISPER_BIN="build/bin/whisper-cli"

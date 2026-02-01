@@ -57,7 +57,7 @@ async fn analyze_emotion_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts/mlx_analyze.py"))
+        .map(|p| p.join("scripts-dev/mlx-analyze.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {
@@ -68,7 +68,7 @@ async fn analyze_emotion_mlx(
     }
 
     if !script_path.exists() {
-        return Err("mlx_analyze.py script not found".to_string());
+        return Err("mlx-analyze.py script not found".to_string());
     }
 
     // Log for debugging
@@ -160,7 +160,7 @@ async fn analyze_fallacy_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts/mlx_analyze.py"))
+        .map(|p| p.join("scripts-dev/mlx-analyze.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {
@@ -171,7 +171,7 @@ async fn analyze_fallacy_mlx(
     }
 
     if !script_path.exists() {
-        return Err("mlx_analyze.py script not found".to_string());
+        return Err("mlx-analyze.py script not found".to_string());
     }
 
     // Log for debugging
