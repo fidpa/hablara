@@ -1,0 +1,46 @@
+# Qwen 2.5 14B Instruct - Optimiert für Hablará (Voice Intelligence Pipeline)
+#
+# Quality Tier: Q1 (Mid-Tier)
+# Improvements vs 7B:
+# - +3% MMLU (78.0% vs 74.8%)
+# - +1% JSON Validity (93% vs 92%)
+# - Better reasoning for complex fallacies
+#
+# Performance-Erwartung auf M4 Pro:
+# - Emotion Analysis: ~2.8s (vs. ~2.2s mit 7B)
+# - Fallacy Detection: ~5.5s (vs. ~4.3s mit 7B)
+# - JSON Reliability: 93%
+#
+# Usage:
+#   ollama pull qwen2.5:14b
+#   ollama create qwen2.5:14b-custom -f qwen2.5-14b-custom.modelfile
+#   ollama run qwen2.5:14b-custom
+
+FROM qwen2.5:14b
+
+# Context Window: 8K ausreichend für Hablará
+PARAMETER num_ctx 8192
+
+# Temperature: 0.3 für strukturierte Outputs
+PARAMETER temperature 0.3
+
+# Top-p: 0.9 für Nucleus Sampling
+PARAMETER top_p 0.9
+
+# Repeat Penalty: Verhindert Halluzination-Loops
+PARAMETER repeat_penalty 1.1
+
+# System Message: Hablará-Context
+SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+
+Deine Aufgaben:
+1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
+2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
+3. JSON Output: Antworte IMMER in gültigem JSON-Format
+
+Wichtig:
+- Sei präzise und objektiv
+- Berücksichtige deutschen Sprachgebrauch und Kultur
+- Gib strukturierte Antworten (JSON Schema)
+- Keine Halluzinationen oder erfundene Details
+"""

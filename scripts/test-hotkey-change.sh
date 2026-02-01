@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Hotkey Change Manual Test Script
+# Führt User durch manuelle Verifikation des Hotkey-Wechsel-Fixes
+
+set -e
+
+echo "=== HOTKEY CHANGE FIX - MANUAL TEST ==="
+echo ""
+echo "Dieser Test verifiziert dass Hotkey-Wechsel ohne App-Neustart funktioniert."
+echo ""
+echo "VORAUSSETZUNGEN:"
+echo "  - App ist gebaut und läuft (pnpm run dev:safe)"
+echo "  - Console ist geöffnet (Cmd+Option+I)"
+echo ""
+echo "SCHRITTE:"
+echo ""
+echo "1. Settings öffnen"
+echo "   - Klick auf Settings-Icon ODER"
+echo "   - Cmd+, (macOS) / Ctrl+, (Windows)"
+echo ""
+echo "2. Allgemein Tab → Hotkey Sektion"
+echo "   - Aktueller Wert: Control+Shift+D"
+echo "   - Neuer Wert eingeben: Control+Shift+Y"
+echo ""
+echo "3. Console Logs prüfen (WICHTIG)"
+echo "   Nach dem Save-Klick sollten folgende Logs erscheinen:"
+echo "   ✅ [SettingsPanel] All hotkeys unregistered before settings save"
+echo "   ✅ [useHotkey] Hotkey registered: Control+Shift+Y"
+echo ""
+echo "4. Hotkey testen"
+echo "   a) Neuer Hotkey: Control+Shift+Y drücken"
+echo "      → Recording sollte starten ✅"
+echo ""
+echo "   b) Alter Hotkey: Control+Shift+D drücken"
+echo "      → Nichts sollte passieren ✅"
+echo ""
+echo "ERFOLGS-KRITERIEN:"
+echo "  ✅ Neuer Hotkey funktioniert OHNE App-Neustart"
+echo "  ✅ Alter Hotkey ist deaktiviert"
+echo "  ✅ Console Logs zeigen unregisterAll + neue Registration"
+echo "  ✅ Keine Errors in Console"
+echo ""
+echo "FEHLERFALL:"
+echo "  Wenn neuer Hotkey NICHT funktioniert:"
+echo "  1. Debug Logs in Console prüfen"
+echo "  2. docs/troubleshooting/HOTKEY_SWITCH_BUG.md öffnen"
+echo "  3. Debugging-Schritte durchführen"
+echo ""
+echo "=== READY TO TEST ==="
+echo ""
+echo "Drücke ENTER um mit dem Test zu beginnen..."
+read -r
+
+echo ""
+echo "Starte App..."
+pnpm run dev:safe

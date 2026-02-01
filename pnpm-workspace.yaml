@@ -1,0 +1,8 @@
+overrides:
+  eslint@<9.26.0: '>=9.26.0'
+  glob@>=10.2.0 <10.5.0: '>=10.5.0'
+  # Next.js frozen at 14.2.35 for Tauri compatibility
+  # next@>=10.0.0 <15.5.10: '>=15.5.10'
+  # next@>=13.0.0 <15.0.8: '>=15.0.8'
+  # Force all sharp dependencies to use latest version
+  sharp@<0.34.5: '>=0.34.5'

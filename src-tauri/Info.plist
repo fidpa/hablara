@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Hablará benoetigt Zugriff auf das Mikrofon fuer Sprachaufnahmen und Transkription.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Hablará benoetigt Zugriff auf die Kamera (optional, fuer zukuenftige Funktionen).</string>
+</dict>
+</plist>

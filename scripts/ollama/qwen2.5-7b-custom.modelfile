@@ -1,0 +1,53 @@
+# Qwen 2.5 7B Instruct - Optimiert für Hablará (Voice Intelligence Pipeline)
+#
+# Optimierungen:
+# - Context auf 8K limitiert (Hablará braucht max 1K tokens)
+# - Temperature 0.3 für deterministische strukturierte Outputs
+# - Top-p 0.9 für konsistente JSON-Generierung
+# - Repeat Penalty gegen Halluzination-Loops
+#
+# Performance-Erwartung auf M4 Pro:
+# - Emotion Analysis: ~2.2s (vs. ~2.7s mit phi4)
+# - Fallacy Detection: ~4.3s (vs. ~5.4s mit phi4)
+# - JSON Reliability: 92% (beste Open-Source)
+#
+# Usage:
+#   ollama create qwen2.5:7b-custom -f qwen2.5-7b-custom.modelfile
+#   ollama run qwen2.5:7b-custom
+
+FROM qwen2.5:7b
+
+# Context Window: 8K ausreichend für Hablará (max 650 tokens Prompt)
+# Reduziert RAM von 12.5 GB (128K) auf 6.8 GB (8K) → +15% Speed
+PARAMETER num_ctx 8192
+
+# Temperature: 0.3 für strukturierte Outputs (JSON Schema)
+# Niedrig = deterministisch, konsistent
+PARAMETER temperature 0.3
+
+# Top-p: 0.9 für Nucleus Sampling
+# Balanciert Kreativität und Determinismus
+PARAMETER top_p 0.9
+
+# Repeat Penalty: Verhindert Halluzination-Loops
+# Wichtig für JSON-Generierung (keine endlosen Arrays)
+PARAMETER repeat_penalty 1.1
+
+# Stop Sequences: Removed - verhinderte vollständiges JSON
+# PARAMETER stop "}" ← PROBLEM: Stoppt BEVOR } geschrieben wird!
+# num_predict in API-Call + format:"json" reichen aus
+
+# System Message: Hablará-Context
+SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+
+Deine Aufgaben:
+1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
+2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
+3. JSON Output: Antworte IMMER in gültigem JSON-Format
+
+Wichtig:
+- Sei präzise und objektiv
+- Berücksichtige deutschen Sprachgebrauch und Kultur
+- Gib strukturierte Antworten (JSON Schema)
+- Keine Halluzinationen oder erfundene Details
+"""

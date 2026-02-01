@@ -1,0 +1,468 @@
+/*
+ * Global CSS Entry Point
+ * Guidelines: docs/reference/guidelines/CSS.md
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ===========================================
+       shadcn/ui Design Tokens (HSL Format)
+       =========================================== */
+
+    /* Base Colors */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    /* Card */
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    /* Popover */
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Primary */
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    /* Secondary */
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    /* Muted */
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    /* Accent */
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Destructive */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Border & Input */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    /* Radius */
+    --radius: 0.75rem;
+
+    /* ===========================================
+       Hablará Design Tokens - Single Source of Truth
+       =========================================== */
+
+    /* Background Colors */
+    --color-bg-primary: #0f172a;      /* slate-900 */
+    --color-bg-secondary: #1e293b;    /* slate-800 */
+    --color-bg-elevated: #334155;     /* slate-700 */
+
+    /* Surface Colors */
+    --color-surface: #1e293b;         /* slate-800 */
+    --color-surface-hover: #334155;   /* slate-700 */
+
+    /* Border Colors */
+    --color-border: #334155;          /* slate-700 */
+    --color-border-muted: #475569;    /* slate-600 */
+
+    /* Text Colors */
+    --color-text-primary: #ffffff;
+    --color-text-secondary: #cbd5e1;  /* slate-300 */
+    --color-text-muted: #94a3b8;      /* slate-400 */
+    --color-text-disabled: #64748b;   /* slate-500 */
+
+    /* Accent Colors */
+    --color-accent-primary: #3b82f6;  /* blue-500 */
+    --color-accent-hover: #2563eb;    /* blue-600 */
+    --color-accent-success: #22c55e;  /* green-500 */
+    --color-accent-warning: #f59e0b;  /* amber-500 */
+    --color-accent-error: #ef4444;    /* red-500 */
+
+    /* Blend Indicator (for Emotion Circumplex) */
+    --color-blend-indicator: #fbbf24; /* amber-400 */
+
+    /* Emotion Colors */
+    --color-emotion-neutral: #6b7280;     /* gray-500 */
+    --color-emotion-calm: #22c55e;        /* green-500 */
+    --color-emotion-stress: #ef4444;      /* red-500 */
+    --color-emotion-excitement: #f59e0b;  /* amber-500 */
+    --color-emotion-uncertainty: #8b5cf6; /* violet-500 */
+    --color-emotion-frustration: #dc2626; /* red-600 */
+    --color-emotion-joy: #10b981;         /* emerald-500 */
+    --color-emotion-doubt: #a855f7;       /* purple-500 */
+    --color-emotion-conviction: #3b82f6;  /* blue-500 */
+    --color-emotion-aggression: #b91c1c;  /* red-700 */
+
+    /* Fallacy Colors - Tier 1 */
+    --color-fallacy-ad-hominem: #ef4444;      /* red-500 */
+    --color-fallacy-straw-man: #f97316;       /* orange-500 */
+    --color-fallacy-false-dichotomy: #eab308; /* yellow-500 */
+    --color-fallacy-appeal-authority: #84cc16;/* lime-500 */
+    --color-fallacy-circular: #06b6d4;        /* cyan-500 */
+    --color-fallacy-slippery-slope: #8b5cf6;  /* violet-500 */
+
+    /* Fallacy Colors - Tier 2 */
+    --color-fallacy-red-herring: #dc2626;         /* red-600 */
+    --color-fallacy-tu-quoque: #ea580c;           /* orange-600 */
+    --color-fallacy-hasty-generalization: #d97706;/* amber-600 */
+    --color-fallacy-post-hoc: #ca8a04;            /* yellow-600 */
+    --color-fallacy-bandwagon: #65a30d;           /* lime-600 */
+    --color-fallacy-appeal-emotion: #16a34a;      /* green-600 */
+    --color-fallacy-appeal-ignorance: #059669;    /* emerald-600 */
+    --color-fallacy-loaded-question: #0d9488;     /* teal-600 */
+    --color-fallacy-no-true-scotsman: #0891b2;    /* cyan-600 */
+    --color-fallacy-false-cause: #0284c7;         /* sky-600 */
+
+    /* Cognitive Distortion Colors */
+    --color-distortion-catastrophizing: #ef4444;      /* red-500 */
+    --color-distortion-all-or-nothing: #f97316;       /* orange-500 */
+    --color-distortion-overgeneralization: #eab308;   /* yellow-500 */
+    --color-distortion-mind-reading: #84cc16;         /* lime-500 */
+    --color-distortion-personalization: #22c55e;      /* green-500 */
+    --color-distortion-emotional-reasoning: #14b8a6;  /* teal-500 */
+    --color-distortion-should-statements: #3b82f6;    /* blue-500 */
+
+    /* Topic Colors */
+    --color-topic-work-career: #3b82f6;           /* blue-500 */
+    --color-topic-health-wellbeing: #22c55e;      /* green-500 */
+    --color-topic-relationships-social: #ec4899;  /* pink-500 */
+    --color-topic-finances: #f59e0b;              /* amber-500 */
+    --color-topic-personal-development: #8b5cf6;  /* violet-500 */
+    --color-topic-creativity-hobbies: #06b6d4;    /* cyan-500 */
+    --color-topic-other: #6b7280;                 /* gray-500 */
+
+    /* Tone Dimension Colors */
+    --color-tone-formality: #3b82f6;              /* blue-500 */
+    --color-tone-professionalism: #8b5cf6;        /* violet-500 */
+    --color-tone-directness: #f59e0b;             /* amber-500 */
+    --color-tone-energy: #ef4444;                 /* red-500 */
+    --color-tone-seriousness: #22c55e;            /* green-500 */
+
+    /* Audio Level Meter Colors */
+    --color-level-normal: #22c55e;                /* green-500 */
+    --color-level-warning: #eab308;               /* yellow-500 */
+    --color-level-danger: #ef4444;                /* red-500 */
+
+    /* ===========================================
+       Alpha Color Variables (Dashboard Pattern)
+       =========================================== */
+
+    /* Emotion Alphas (fuer Hintergruende) */
+    --color-emotion-neutral-alpha-20: rgba(107, 114, 128, 0.2);
+    --color-emotion-calm-alpha-20: rgba(34, 197, 94, 0.2);
+    --color-emotion-calm-alpha-30: rgba(34, 197, 94, 0.3);
+    --color-emotion-stress-alpha-20: rgba(239, 68, 68, 0.2);
+    --color-emotion-stress-alpha-30: rgba(239, 68, 68, 0.3);
+    --color-emotion-excitement-alpha-20: rgba(245, 158, 11, 0.2);
+    --color-emotion-excitement-alpha-30: rgba(245, 158, 11, 0.3);
+    --color-emotion-uncertainty-alpha-20: rgba(139, 92, 246, 0.2);
+    --color-emotion-frustration-alpha-20: rgba(220, 38, 38, 0.2);
+    --color-emotion-joy-alpha-20: rgba(16, 185, 129, 0.2);
+    --color-emotion-doubt-alpha-20: rgba(168, 85, 247, 0.2);
+    --color-emotion-conviction-alpha-20: rgba(59, 130, 246, 0.2);
+    --color-emotion-aggression-alpha-20: rgba(185, 28, 28, 0.2);
+
+    /* Fallacy Alphas */
+    --color-fallacy-ad-hominem-alpha-30: rgba(239, 68, 68, 0.3);
+    --color-fallacy-straw-man-alpha-30: rgba(249, 115, 22, 0.3);
+    --color-fallacy-false-dichotomy-alpha-30: rgba(234, 179, 8, 0.3);
+    --color-fallacy-appeal-authority-alpha-30: rgba(132, 204, 22, 0.3);
+    --color-fallacy-circular-alpha-30: rgba(6, 182, 212, 0.3);
+    --color-fallacy-slippery-slope-alpha-30: rgba(139, 92, 246, 0.3);
+
+    /* Surface Alphas (fuer Glassmorphism) */
+    --color-surface-alpha-50: rgba(30, 41, 59, 0.5);
+    --color-surface-alpha-80: rgba(30, 41, 59, 0.8);
+    --color-surface-alpha-95: rgba(30, 41, 59, 0.95);
+  }
+
+  /* Light Mode */
+  .light {
+    /* shadcn/ui tokens */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    /* Hablará Custom Tokens */
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f8fafc;
+    --color-surface: #f8fafc;
+    --color-surface-hover: #f1f5f9;
+    --color-border: #e2e8f0;
+    --color-border-muted: #cbd5e1;
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #334155;
+    --color-text-muted: #64748b;
+
+    /* Surface alphas for glassmorphism */
+    --color-surface-alpha-50: rgba(248, 250, 252, 0.5);
+    --color-surface-alpha-80: rgba(248, 250, 252, 0.8);
+    --color-surface-alpha-95: rgba(248, 250, 252, 0.95);
+  }
+
+  * {
+    @apply border-border;
+    /* Firefox scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    background: linear-gradient(
+      to bottom,
+      hsl(var(--background)),
+      hsl(222.2 84% 6%)
+    );
+  }
+
+  /* Light Mode - Override gradient with solid background */
+  .light body {
+    background: hsl(var(--background));
+  }
+
+  /* Light Mode - Firefox scrollbar */
+  .light * {
+    scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
+  }
+}
+
+@layer components {
+  /* ===========================================
+     Status Indicator Classes (Dashboard Pattern)
+     =========================================== */
+
+  /* Text Status Colors */
+  .status-ok {
+    @apply text-green-500;
+  }
+
+  .status-warning {
+    @apply text-amber-500;
+  }
+
+  .status-error {
+    @apply text-red-500;
+  }
+
+  .status-info {
+    @apply text-slate-400;
+  }
+
+  /* Status Dots (Circular Indicators) */
+  .status-dot {
+    @apply w-2 h-2 rounded-full inline-block;
+  }
+
+  .status-dot-ok {
+    @apply bg-green-500;
+  }
+
+  .status-dot-warning {
+    @apply bg-amber-500;
+  }
+
+  .status-dot-error {
+    @apply bg-red-500;
+  }
+
+  .status-dot-pulse {
+    @apply animate-pulse;
+  }
+
+  /* ===========================================
+     Skip Link for Accessibility
+     =========================================== */
+
+  .skip-link {
+    @apply absolute -top-10 left-0 z-50;
+    @apply bg-primary text-primary-foreground;
+    @apply px-4 py-2 rounded-br-lg;
+    @apply focus-visible:top-0;
+    @apply transition-[top] duration-150;
+    @apply motion-reduce:transition-none;
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+  }
+
+  /* ===========================================
+     Widget Container Pattern (Dashboard Pattern)
+     =========================================== */
+
+  .vip-widget {
+    container-type: inline-size;
+    container-name: widget;
+    contain: layout style;
+  }
+
+  /* Container-responsive Widget Styles */
+  @container widget (max-width: 400px) {
+    .widget-content {
+      @apply flex-col gap-2;
+    }
+
+    .widget-title {
+      @apply text-sm;
+    }
+  }
+
+  @container widget (min-width: 600px) {
+    .widget-content {
+      @apply flex-row gap-6;
+    }
+
+    .widget-title {
+      @apply text-lg;
+    }
+  }
+}
+
+/* Custom scrollbar - WebKit (Chrome, Safari, Edge) - Dark Mode */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Custom scrollbar - Light Mode */
+.light ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* Waveform animation for recording indicator */
+@keyframes waveform-1 {
+  0%, 100% { height: 20%; }
+  50% { height: 80%; }
+}
+
+@keyframes waveform-2 {
+  0%, 100% { height: 40%; }
+  50% { height: 100%; }
+}
+
+@keyframes waveform-3 {
+  0%, 100% { height: 60%; }
+  50% { height: 30%; }
+}
+
+.waveform-bar:nth-child(1) { animation: waveform-1 0.8s ease-in-out infinite; }
+.waveform-bar:nth-child(2) { animation: waveform-2 0.7s ease-in-out infinite 0.1s; }
+.waveform-bar:nth-child(3) { animation: waveform-3 0.9s ease-in-out infinite 0.2s; }
+.waveform-bar:nth-child(4) { animation: waveform-1 0.75s ease-in-out infinite 0.3s; }
+.waveform-bar:nth-child(5) { animation: waveform-2 0.85s ease-in-out infinite 0.15s; }
+
+/* Disable waveform animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .waveform-bar {
+    animation: none !important;
+  }
+}
+
+/* Processing Progress animations */
+@keyframes step-complete {
+  0% {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes step-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.step-icon-complete {
+  animation: step-complete 0.3s ease-out;
+}
+
+.step-active-pulse {
+  animation: step-pulse 1.5s ease-in-out infinite;
+}
+
+/* Screen Reader Only utility class for accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Chat Message Fade-In Animation (Phase 16) */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Disable fade-in for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in {
+    animation: none;
+  }
+}

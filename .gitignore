@@ -1,0 +1,279 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# =============================================================================
+# Dependencies
+# =============================================================================
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnpm-store/
+
+# =============================================================================
+# Build Outputs
+# =============================================================================
+
+# Next.js
+/.next/
+/out/
+/build
+.next/
+
+# Tauri
+/src-tauri/target/
+/src-tauri/WixTools/
+/src-tauri/gen/schemas/*.json
+*.bundle
+.build/
+
+# Rust
+target/
+**/*.rs.bk
+Cargo.lock
+!src-tauri/Cargo.lock
+
+# =============================================================================
+# ML Models (LARGE FILES - download separately)
+# =============================================================================
+
+# Whisper models
+/src-tauri/models/
+/src-tauri/binaries/
+.whisper-build/
+*.ggml
+*.gguf
+
+# ONNX models
+*.onnx
+/src-tauri/resources/models/*.onnx
+/src-tauri/resources/models/*.bin
+
+# EXCEPTION: public/models/ MUST be tracked (RAG ONNX Bundle for offline operation)
+!/public/models/
+!/public/models/**
+
+# PyTorch models
+*.pt
+*.pth
+*.safetensors
+
+# MLX models
+*.mlx
+*.npz
+mlx_models/
+
+# HuggingFace cache
+.cache/huggingface/
+huggingface/
+
+# General model files
+*.bin
+!yarn.lock.bin
+
+# Specific model directories (all ignored except public/models/)
+/src-tauri/models/      # Whisper models
+/mlx_models/            # MLX models
+models/                 # Catch-all for other models/ directories
+checkpoints/
+
+# =============================================================================
+# Audio Files (Debug Recordings)
+# =============================================================================
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.m4a
+*.aac
+*.wma
+*.aiff
+*.opus
+recordings/
+audio_samples/
+~/VIP-Debug/
+
+# =============================================================================
+# Python (MLX-Whisper, Scripts)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+*.egg
+.ipynb_checkpoints/
+.mypy_cache/
+.ruff_cache/
+
+# =============================================================================
+# Testing & Coverage
+# =============================================================================
+/coverage
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+e2e-results/
+screenshots/
+videos/
+traces/
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+.env
+.env.*
+!.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.cert
+secrets/
+credentials.json
+
+# Development Overrides
+*.local.json
+local-config.json
+
+# =============================================================================
+# Logs & Debug
+# =============================================================================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+logs/
+
+# Core Dumps (Rust/Native crashes)
+core
+*.core
+*.dmp
+
+# =============================================================================
+# IDE & Editor
+# =============================================================================
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/css_custom_data.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+*.code-workspace
+.fleet/
+.atom/
+*.iml
+
+# =============================================================================
+# OS Generated
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# TypeScript
+# =============================================================================
+*.tsbuildinfo
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# =============================================================================
+# Vercel & Deployment
+# =============================================================================
+.vercel
+.netlify
+
+# =============================================================================
+# Symlinks & External References
+# =============================================================================
+/shared
+/server
+
+# =============================================================================
+# Temporary & Cache
+# =============================================================================
+*.tmp
+*.temp
+*.cache
+.turbo/
+.eslintcache
+.prettiercache
+.stylelintcache
+
+# =============================================================================
+# Backup & Patch Files
+# =============================================================================
+*.bak
+*.backup
+*.orig
+*.patch
+*.diff
+*.rej
+
+# =============================================================================
+# macOS App Bundles (Tauri builds)
+# =============================================================================
+*.app/
+*.dmg
+*.pkg
+*.deb
+*.AppImage
+*.msi
+*.exe
+!scripts/*.sh
+
+# =============================================================================
+# Database & State
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# =============================================================================
+# Benchmark & Performance Data
+# =============================================================================
+benchmark-results/
+bench-output/
+*.benchmark
+flamegraph.svg
+
+# =============================================================================
+# Personal & Sensitive Files
+# =============================================================================
+TESTER_EMAIL.md
+TESTER_EMAIL_PLAIN.txt
+package-lock.json
+
+# =============================================================================
+# Documentation (Claude Code)
+# =============================================================================
+CLAUDE.md
+.claude/
+docs/
