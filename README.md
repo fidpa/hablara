@@ -34,7 +34,7 @@ Erkennt Emotionen, Argumentationsmuster und Kommunikationsstile im Gesprochenen.
 curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
 ```
 
-Script ist verifizierbar (siehe unten)
+Skript ist verifizierbar (siehe unten)
 
 **Was macht dieser Befehl?**
 1. Installiert Ollama
@@ -43,16 +43,16 @@ Script ist verifizierbar (siehe unten)
 4. Verifiziert Installation automatisch
 
 <details>
-<summary>Script vor Ausführung prüfen (empfohlen)</summary>
+<summary>Skript prüfen</summary>
 
-Wenn du das Script vor Ausführung inspizieren möchtest:
+Skript vor Ausführung inspizieren:
 
 ```bash
-# Script herunterladen
+# Skript herunterladen
 curl -fsSL -o setup-ollama-quick.sh \
   https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh
 
-# Script inspizieren (359 Zeilen)
+# Skript inspizieren
 less setup-ollama-quick.sh
 
 # Ausführen
@@ -66,7 +66,7 @@ shasum -a 256 setup-ollama-quick.sh
 # Erwarteter Hash: cd3d8900073b07050f6e53a847750b5e855a96a5e69187d6cba31c03d5869504
 ```
 
-**Security-Hinweis:** Hash-Verification schützt gegen Download-Korruption, aber NICHT gegen Repository-Kompromittierung (Attacker könnte Script UND Hash ändern). Für maximale Sicherheit: Script manuell lesen.
+**Security-Hinweis:** Hash-Verification schützt gegen Download-Korruption, aber NICHT gegen Repository-Kompromittierung (Attacker könnte Skript UND Hash ändern). Für maximale Sicherheit: Skript manuell lesen.
 
 </details>
 
@@ -132,12 +132,15 @@ Cloud-LLM erfordert DSGVO-Consent (wird automatisch beim ersten Start abgefragt)
 | Feature | Hablará | Otter.ai | Fireflies.ai | Whisper (plain) |
 |---------|---------|----------|--------------|-----------------|
 | **Privacy (Offline)** | Ja (100%) | Nein | Nein | Ja |
-| **Emotions-Erkennung** | Ja (12 Features) | Nein | Nein | Nein |
+| **Emotions-Erkennung** | Ja (12 Features) | Nein | Ja (3-Tier Sentiment)* | Nein |
 | **Fehlschluss-Erkennung** | Ja (16 Typen) | Nein | Nein | Nein |
 | **Selbstreflexion** | Ja | Nein | Nein | Nein |
 | **Psychol. Frameworks** | Ja (7) | Nein | Nein | Nein |
 | **Meeting-Features** | Nein | Ja | Ja | Nein |
-| **Preis** | Open-Source | $16.99/mo | $10/mo | Kostenlos |
+| **Preis** | Open-Source | $16.99/mo | $10/mo (annual)* | Kostenlos |
+
+\*Fireflies bietet Sentiment-Analyse (positiv/negativ/neutral) ab Business-Plan — keine granulare Emotion-Detection wie Hablará (10 Emotionstypen, Dual-Track Audio+Text).
+\*Fireflies Pro: $18/mo (monthly) / $10/mo (annual). Otter.ai Pro: $16.99/mo (monthly) / $8.33/mo (annual).
 
 ---
 
