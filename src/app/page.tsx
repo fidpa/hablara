@@ -992,6 +992,15 @@ export default function Home(): JSX.Element {
       confidence: 0,
       audioFeatures: null,
     });
+    setCurrentTone({
+      formality: 3,
+      professionalism: 3,
+      directness: 3,
+      energy: 3,
+      seriousness: 3,
+      confidence: 0,
+      source: "fused",
+    });
     setCurrentGFK(null);
     setCurrentCognitive(null);
     setCurrentFourSides(null);
@@ -1000,7 +1009,7 @@ export default function Home(): JSX.Element {
     currentFourSidesRef.current = null;
     processing.reset();
     toast({
-      title: "Verlauf geloescht",
+      title: "Verlauf gelöscht",
       description: "Alle Nachrichten wurden entfernt.",
     });
   }, [toast, processing]);

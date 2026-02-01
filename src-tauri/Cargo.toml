@@ -3,7 +3,7 @@
 
 [package]
 name = "hablara"
-version = "1.0.0"
+version = "1.0.1"
 description = "Hablará - Desktop voice recording with AI-powered transcription and psychological enrichment"
 authors = ["Marc Allgeier"]
 license = "MIT"
@@ -59,3 +59,9 @@ opt-level = "s"
 strip = true
 codegen-units = 1
 panic = "abort"
+
+[features]
+# App Store build: sandboxed, menu bar only (no global hotkeys)
+app-store = []
+# Direct Distribution (default): non-sandboxed, global hotkeys enabled
+default = []

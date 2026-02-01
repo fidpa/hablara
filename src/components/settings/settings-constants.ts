@@ -7,7 +7,7 @@
 // NOTE: Only german-turbo is bundled with Hablará. Other models would require manual installation.
 // Showing only available models to avoid user confusion.
 export const WHISPER_MODELS = [
-  { value: "german-turbo", label: "German Turbo (~1.6GB)", description: "Optimiert fuer Deutsch" },
+  { value: "german-turbo", label: "German Turbo (~1.6GB)", description: "Optimiert für Deutsch" },
 ] as const;
 
 export const WHISPER_PROVIDERS = [
@@ -17,7 +17,7 @@ export const WHISPER_PROVIDERS = [
 
 // DEPRECATED: Models are now discovered dynamically via useAvailableWhisperModels hook
 export const MLX_WHISPER_MODELS = [
-  { value: "german-turbo", label: "German Turbo (~1.6GB)", description: "Optimiert fuer Deutsch" },
+  { value: "german-turbo", label: "German Turbo (~1.6GB)", description: "Optimiert für Deutsch" },
   // large-v3 removed: too large for live transcription (~2.9GB)
 ] as const;
 

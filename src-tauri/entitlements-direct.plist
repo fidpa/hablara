@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ============================================ -->
+    <!-- Direct Distribution Entitlements (DMG)       -->
+    <!-- Sandbox: DISABLED (Enables Global Hotkeys)   -->
+    <!-- ============================================ -->
+
+    <!-- NO Sandbox for Direct Distribution (Global Hotkeys require non-sandboxed app) -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!-- Audio Entitlements for Hardened Runtime (Required for Notarization) -->
+    <!-- NOTE: Non-sandboxed apps need BOTH entitlements for Hardened Runtime compliance -->
+    <!-- - device.audio-input: Audio capture capability -->
+    <!-- - device.microphone: Hardened Runtime microphone access -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+
+    <!-- Network Access -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- File Access (User-Selected) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- NOTE: Keychain access works without explicit entitlement in non-sandboxed apps -->
+</dict>
+</plist>

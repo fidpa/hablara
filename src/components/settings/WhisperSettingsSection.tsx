@@ -133,7 +133,7 @@ export function WhisperSettingsSection({
               onValueChange={(value) => onSettingsChange({ ...settings, mlxWhisperModel: value })}
             >
               <SelectTrigger id="mlx-model">
-                <SelectValue placeholder="Modell waehlen" />
+                <SelectValue placeholder="Modell wählen" />
               </SelectTrigger>
               <SelectContent>
                 {mlxModels.map((model) => (

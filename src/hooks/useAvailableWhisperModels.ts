@@ -18,7 +18,7 @@ const DEFAULT_MODEL: MlxModelInfo = {
   displayName: "German Turbo",
   directory: "whisper-large-v3-turbo-german-f16",
   sizeEstimate: "~1.6GB",
-  description: "Optimiert fuer Deutsch",
+  description: "Optimiert für Deutsch",
 };
 
 interface UseAvailableWhisperModelsReturn {

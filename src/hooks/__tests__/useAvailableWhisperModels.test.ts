@@ -28,7 +28,7 @@ describe('useAvailableWhisperModels', () => {
     displayName: 'German Turbo',
     directory: 'whisper-large-v3-turbo-german-f16',
     sizeEstimate: '~1.6GB',
-    description: 'Optimiert fuer Deutsch',
+    description: 'Optimiert für Deutsch',
   };
 
   beforeEach(() => {
@@ -72,14 +72,14 @@ describe('useAvailableWhisperModels', () => {
           displayName: 'German Turbo',
           directory: 'whisper-large-v3-turbo-german-f16',
           sizeEstimate: '~1.6GB',
-          description: 'Optimiert fuer Deutsch',
+          description: 'Optimiert für Deutsch',
         },
         {
           id: 'large-v3',
           displayName: 'Large V3',
           directory: 'whisper-large-v3',
           sizeEstimate: '~2.9GB',
-          description: 'Hoechste Qualitaet',
+          description: 'Höchste Qualität',
         },
       ];
 

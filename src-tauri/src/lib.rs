@@ -126,10 +126,6 @@ pub fn run() {
             commands::analyze_fallacy_mlx_cmd,
             // Export commands
             commands::open_html_in_browser,
-            // Hotkey Agent commands
-            commands::install_hotkey_agent,
-            commands::uninstall_hotkey_agent,
-            commands::is_hotkey_agent_running,
             // File I/O commands
             commands::read_audio_file,
             commands::get_file_metadata,

@@ -2,15 +2,42 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>com.apple.security.audio.capture</key>
-    <true/>
-    <key>com.apple.security.device.microphone</key>
-    <true/>
+    <!-- ============================================ -->
+    <!-- App Store Distribution Entitlements          -->
+    <!-- Sandbox: ENABLED (Required for App Store)    -->
+    <!-- ============================================ -->
+
+    <!-- CRITICAL: App Sandbox MUST be enabled for App Store -->
     <key>com.apple.security.app-sandbox</key>
-    <false/>
-    <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
+
+    <!-- Audio Input Entitlement (App Sandbox - for microphone access via cpal) -->
+    <!-- NOTE: com.apple.security.device.microphone is for Hardened Runtime only, -->
+    <!--       com.apple.security.device.audio-input is the correct sandbox entitlement -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- Network Access (LLM APIs: Ollama local, OpenAI/Anthropic cloud) -->
     <key>com.apple.security.network.client</key>
     <true/>
+
+    <!-- File Access (User-Selected Read/Write for Storage) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Keychain Access Groups (Required for tauri-plugin-keyring) -->
+    <!-- IMPORTANT: Replace TEAM_ID with actual Team ID after Apple Developer Account setup -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.fidpa.hablara</string>
+    </array>
+
+    <!-- App Identity (Required for App Store) -->
+    <key>com.apple.application-identifier</key>
+    <string>$(AppIdentifierPrefix)com.fidpa.hablara</string>
+
+    <!-- Team ID (Replace with actual Team ID) -->
+    <key>com.apple.developer.team-identifier</key>
+    <string>TEAM_ID</string>
 </dict>
 </plist>

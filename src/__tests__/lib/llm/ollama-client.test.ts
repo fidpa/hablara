@@ -403,7 +403,7 @@ Was genau stört dich?`;
       });
 
       const result = await client.classifyTopic(
-        "Dieser Text hat eine ungueltige Kategorie."
+        "Dieser Text hat eine ungültige Kategorie."
       );
 
       expect(result.topic).toBe("other");
@@ -414,7 +414,7 @@ Was genau stört dich?`;
       mockFetch.mockRejectedValueOnce(new Error("Connection refused"));
 
       const result = await client.classifyTopic(
-        "Dies ist ein laengerer Text fuer den Test."
+        "Dies ist ein längerer Text für den Test."
       );
 
       expect(result.topic).toBe("other");
@@ -453,7 +453,7 @@ Was genau stört dich?`;
       });
 
       const result = await client.classifyTopic(
-        "Ich muss mehr Geld sparen fuer den Urlaub."
+        "Ich muss mehr Geld sparen für den Urlaub."
       );
 
       expect(result.confidence).toBe(1.0); // Clamped to 1
@@ -528,7 +528,7 @@ Was genau stört dich?`;
         });
 
         const result = await client.classifyTopic(
-          `Test text fuer ${topicType} Kategorie.`
+          `Test text für ${topicType} Kategorie.`
         );
 
         expect(result.topic).toBe(topicType);

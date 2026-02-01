@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/fidpa/hablara/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/fidpa/hablara/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
@@ -19,7 +19,7 @@ Erkennt Emotionen, Argumentationsmuster und Kommunikationsstile im Gesprochenen.
 
 **Voraussetzungen:** macOS 10.15+ (Apple Silicon)
 
-**Hinweis:** Ohne LLM-Provider funktioniert nur die Transkription. Alle psychologischen Features (Emotion, Fallacy, GFK) benötigen Ollama, OpenAI oder Anthropic.
+**Hinweis:** Ohne LLM-Anbieter funktioniert nur die Transkription. Alle psychologischen Features (Emotion, Fallacy, GFK) benötigen Ollama, OpenAI oder Anthropic.
 
 ### 3-Schritte Setup
 
@@ -39,7 +39,7 @@ Skript ist verifizierbar (siehe unten)
 **Was macht dieser Befehl?**
 1. Installiert Ollama
 2. Lädt qwen2.5:7b Modell herunter (~4.7GB)
-3. Erstellt optimiertes Custom-Modell (deutsche Sprachoptimierung)
+3. Erstellt optimiertes angepasstes Modell (deutsche Sprachoptimierung)
 4. Verifiziert Installation automatisch
 
 <details>
@@ -109,12 +109,12 @@ curl http://localhost:11434/api/version
 
 Wenn Ollama-Installation nicht möglich ist oder Probleme bereitet:
 
-1. **Hablará öffnen** → Settings (Zahnrad-Icon) → LLM Provider
-2. **Provider wählen**: OpenAI oder Anthropic
+1. **Hablará öffnen** → Einstellungen (Zahnrad-Icon) → LLM Anbieter
+2. **Anbieter wählen**: OpenAI oder Anthropic
 3. **API Key eingeben**:
    - OpenAI: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
    - Anthropic: [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
-4. **Kosten**: ~$0.0002-0.0024 pro Aufnahme (je nach Provider)
+4. **Kosten**: ~$0.0002-0.0024 pro Aufnahme (je nach Anbieter)
 
 Cloud-LLM erfordert DSGVO-Consent (wird automatisch beim ersten Start abgefragt)
 
@@ -129,7 +129,7 @@ Cloud-LLM erfordert DSGVO-Consent (wird automatisch beim ersten Start abgefragt)
 
 ## Im Vergleich
 
-| Feature | Hablará | Otter.ai | Fireflies.ai | Whisper (plain) |
+| Funktion | Hablará | Otter.ai | Fireflies.ai | Whisper (plain) |
 |---------|---------|----------|--------------|-----------------|
 | **Privacy (Offline)** | Ja (100%) | Nein | Nein | Ja |
 | **Emotions-Erkennung** | Ja (12 Features) | Nein | Ja (3-Tier Sentiment)* | Nein |
@@ -243,7 +243,7 @@ Shift+D)                  Fallacy
 |----------|-----------------|
 | **API Key Verschlüsselung** | OS-native Keychain (macOS: AES-256-GCM) |
 | **Keine Cloud-Pflicht** | Ollama + whisper.cpp vollständig offline |
-| **Datenlöschung** | Clear-All-Button, konfigurierbare Aufbewahrung |
+| **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
 | **Open-Source** | Transparenz durch offenen Code |
 
 ### Abgrenzung zu Gesundheits-Apps
@@ -254,16 +254,16 @@ Hablará ist ein **Selbstreflexions-Tool**, kein medizinisches Produkt:
 - **NICHT Art. 9 (Gesundheitsdaten):** Kein ICD-10-Bezug, keine Diagnosen
 - **Abgrenzung:** Anders als MindDoc (klinisch, Art. 9) oder Daylio (nur Mood-Logging)
 
-**Wichtiger Hinweis:** Bei Verwendung von Cloud-Providern (OpenAI, Anthropic) gelten deren Datenschutzbestimmungen.
+**Wichtiger Hinweis:** Bei Verwendung von Cloud-Anbietern (OpenAI, Anthropic) gelten deren Datenschutzbestimmungen.
 
 ---
 
 ## Funktionen
 
 **Core-Features:**
-- **Hotkey-Aktivierung** – Starte Recording mit Ctrl+Shift+D aus jeder Anwendung
+- **Hotkey-Aktivierung** – Starte die Aufnahme mit Ctrl+Shift+D aus jeder Anwendung
 - **Native Audio-Aufnahme** – Professionelle Audioqualität für präzise Transkription (cpal @ 16kHz)
-- **Lokale Speech-to-Text** – Deine Audio-Daten bleiben auf deinem Gerät (whisper.cpp + MLX-Whisper optional)
+- **Lokale Transkription** – Deine Audio-Daten bleiben auf deinem Gerät (whisper.cpp + MLX-Whisper optional)
 - **Echtzeit Audio-Level Meter** – Visuelle Rückmeldung während der Aufnahme (grün/gelb/rot)
 
 **AI-Enrichment (7 psychologisch-fundierte Analysen):**
@@ -319,14 +319,14 @@ Hablará ist ein **Selbstreflexions-Tool**, kein medizinisches Produkt:
 **Technisch:**
 - **Flexible LLM-Wahl** – Ollama (lokal/kostenlos), OpenAI, oder Anthropic Claude
 - **Persistente Speicherung** – Alle Aufnahmen mit Metadaten automatisch gespeichert
-- **Intelligenter Cancel & Retry** – Verarbeitung abbrechen mit 1-Klick-Neuversuch (kontextbewusst)
-- **Chat-Export** – 5 Formate (Markdown/TXT/PDF/HTML/DOCX) mit Full Metadata Export
-- **Recording PDF Export** – Einzelne Aufnahmen als PDF exportieren (10 Sektionen: Transkript + alle Analysen)
+- **Abbrechen & Wiederholen** – Verarbeitung abbrechen mit 1-Klick-Neuversuch (kontextbewusst)
+- **Chat-Export** – 5 Formate (Markdown/TXT/PDF/HTML/DOCX) mit Export aller Metadaten
+- **PDF Export** – Einzelne Aufnahmen als PDF exportieren (10 Sektionen: Transkript + alle Analysen)
 - **Sichere API Key Speicherung** – OS-native Verschlüsselung (Keychain/Credential Manager)
 - **Performance-Optimiert** – INT8-Quantization (-75% Model Size), DMG: 1.5 GB, App: 1.9 GB
 
 **Distribution & Deployment:**
-- **PKG Installer mit Custom UI** – Logo, README, License, 24 KB Package Size
+- **PKG Installer mit eigene UI** – Logo, README, License, 24 KB Package Size
 - **macOS-native Integration** – System Keychain, Code-Signed, Window State Persistence
 
 <details>
@@ -367,7 +367,7 @@ Jetzt weiß ich, wie ich das angehen will."
 - **Sprache:** Optimiert für Deutsch (andere Sprachen möglich, aber ungetestet)
 
 **Hinweise:**
-- **Verarbeitungsdauer** hängt ab von: Aufnahmelänge, Analyseebenen, Hardware, LLM-Provider
+- **Verarbeitungsdauer** hängt ab von: Aufnahmelänge, Analyseebenen, Hardware, LLM-Anbieter
 - **KI-Ergebnisse** dienen der Selbstreflexion und können fehlerhaft sein
 - Kein Ersatz für professionelle psychologische Beratung
 - Bei psychischen Belastungen: Telefonseelsorge 0800 111 0 111 (24/7, kostenlos)
@@ -440,7 +440,7 @@ Jetzt weiß ich, wie ich das angehen will."
 
 **Warum Tauri 2.0 statt Electron?**
 - Kleineres Base-Framework, schnellerer Startup (~200ms vs. ~800ms)
-- Native Rust ohne FFI-Overhead, Security-Sandbox by Default
+- Native Rust ohne FFI-Overhead, integrierte Security-Sandbox
 
 **Warum Native Audio (cpal) statt Web Audio API?**
 - Browser ignoriert 16kHz Request (liefert 48kHz). VAD: 0% vs. >90% mit cpal
@@ -459,17 +459,17 @@ Jetzt weiß ich, wie ich das angehen will."
 **Warum whisper.cpp (lokal) statt Cloud-STT?**
 - 100% Privacy, $0 Kosten, schnelle lokale Inferenz
 
-**Warum Ollama als Default-LLM?**
+**Warum Ollama als Standard-LLM?**
 - Privacy-First, $0, 2-Command Setup, Persistent RAM (kein Cold-Start)
 
 **Warum Qwen 2.5 als Modell?**
 - **Mehrsprachig trainiert:** Alibaba's Qwen2.5 wurde auf umfangreichen mehrsprachigen Daten trainiert (inkl. Deutsch)
 - **Balanced Size:** 7B Parameter - guter Kompromiss zwischen Qualität und Latenz
 - **JSON Compliance:** Zuverlässige strukturierte Outputs für unsere Prompt-Architektur
-- **Custom-optimiert:** Angepasstes Modelfile - reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
+- **Angepasstes Modelfile:** - reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
 - **Praktisch bewährt:** Funktioniert gut für unsere deutschen Analyse-Prompts
 
-**Warum Multi-Provider LLM?**
+**Warum Multi-Anbieter LLM?**
 - User-Choice: Privacy (Ollama) vs. Speed (OpenAI) vs. Quality (Anthropic)
 - 9 LLM-Methods identisch, kein Vendor Lock-in
 
@@ -544,9 +544,9 @@ curl -L -o src-tauri/models/ggml-german-turbo.bin \
   https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-german-turbo.bin
 ```
 
-### 3. Ollama einrichten (Production Default für LLM)
+### 3. Ollama einrichten (Produktions-Standard für LLM)
 
-**Ollama ist der empfohlene LLM-Provider** für optimale Performance (persistent server).
+**Ollama ist der empfohlene LLM-Anbieter** für optimale Performance (persistent server).
 
 **Bereits installiert?** Prüfen mit:
 ```bash
@@ -569,8 +569,8 @@ ollama pull qwen2.5:7b                    # 4.7 GB, einmalig
 ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile  # Hablará-optimiert
 ```
 
-**LLM-Provider Alternativen:**
-- **MLX-LLM** (Optional, Power-User): 3x schneller, manuelle Setup erforderlich
+**LLM-Anbieter Alternativen:**
+- **MLX-LLM** (Optional, Power-User): 3x schneller, manuelles Setup erforderlich
 - **OpenAI/Anthropic API**: API Key in Settings konfigurieren
 
 ### 4. Development starten
@@ -604,11 +604,11 @@ Die App wird unter `src-tauri/target/release/bundle/` erstellt.
 </details>
 
 <details>
-<summary><b>LLM-Provider</b> – Ollama, OpenAI, Anthropic</summary>
+<summary><b>LLM-Anbieter</b> – Ollama, OpenAI, Anthropic</summary>
 
-Hablará unterstützt 3 gleichwertige LLM-Provider - wähle nach deinen Präferenzen:
+Hablará unterstützt 3 gleichwertige LLM-Anbieter - wähle nach deinen Präferenzen:
 
-| Provider | Vorteile | Setup-Aufwand | Kosten | DSGVO | Empfehlung |
+| Anbieter | Vorteile | Setup-Aufwand | Kosten | DSGVO | Empfehlung |
 |----------|----------|---------------|--------|-------|------------|
 | **Ollama** | 100% lokal, keine API-Keys | Niedrig | Kostenlos | Konform | **Standard** |
 | **OpenAI** | Schnellste Antworten, GPT-4o | Sehr niedrig | Pay-per-Use | Cloud | Bei Bedarf |
@@ -617,13 +617,13 @@ Hablará unterstützt 3 gleichwertige LLM-Provider - wähle nach deinen Präfere
 ### Wechsel mit einem Klick
 
 ```typescript
-// Settings → LLM Provider → wählen
+// Settings → LLM Anbieter → wählen
 // KEINE Code-Änderung notwendig
 ```
 
 ### Performance-Vergleich
 
-| Provider | Geschwindigkeit | Abhängigkeit |
+| Anbieter | Geschwindigkeit | Abhängigkeit |
 |----------|-----------------|--------------|
 | **Ollama** | Mittel | Hardware |
 | **MLX-LLM (optional)** | Schnell | Hardware + MLX-Setup |
@@ -644,7 +644,7 @@ Hablará unterstützt 3 gleichwertige LLM-Provider - wähle nach deinen Präfere
 **6 GB** (qwen2.5:7b). Kleinere Alternative: qwen2.5:3b (2 GB).
 
 ### Ist Hablará Production-Ready?
-**Ja** – Version 1.0.0 ist bereit für Evaluation. Core-Features vollständig, macOS-optimiert.
+**Ja** – Version 1.0.1 ist bereit für Evaluation. Core-Features vollständig, macOS-optimiert.
 
 ### Wo speichert Hablará Daten?
 **Lokal**: `~/Hablara/recordings/` (keine Cloud-Sync)
@@ -662,8 +662,8 @@ Hablará unterstützt 3 gleichwertige LLM-Provider - wähle nach deinen Präfere
 
 **Export-Button** in der Chat-Ansicht (neben RAG-Chatbot). Alle Metadaten (Emotion, Fallacies, Audio Features) werden inkludiert, wenn aktiviert.
 
-### Wie kann ich zwischen LLM-Providern wechseln?
-**Settings → LLM Provider** – Ollama/OpenAI/Anthropic mit einem Klick wählbar.
+### Wie kann ich zwischen LLM-Anbietern wechseln?
+**Settings → LLM Anbieter** – Ollama/OpenAI/Anthropic mit einem Klick wählbar.
 
 ---
 
@@ -718,7 +718,7 @@ Siehe [Cloud-LLM Setup](#schnellstart-macos) → "Alternative: Cloud-LLM" Collap
 
 **App zeigt nur Transcription, keine Emotion/Fallacy**
 
-Kein LLM-Provider konfiguriert.
+Kein LLM-Anbieter konfiguriert.
 
 **Lösung:** Siehe "Ollama nicht verfügbar" oben - ohne LLM funktionieren nur Basis-Features (Transcription)
 
@@ -726,4 +726,4 @@ Kein LLM-Provider konfiguriert.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.0 | **Stand:** 2026-02-01
+**Autor:** Marc Allgeier | **Version:** 1.0.1 | **Stand:** 2026-02-01

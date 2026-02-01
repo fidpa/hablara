@@ -2,9 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- Privacy Usage Descriptions (Required by Apple) -->
     <key>NSMicrophoneUsageDescription</key>
-    <string>Hablará benoetigt Zugriff auf das Mikrofon fuer Sprachaufnahmen und Transkription.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>Hablará benoetigt Zugriff auf die Kamera (optional, fuer zukuenftige Funktionen).</string>
+    <string>Hablará benötigt Mikrofon-Zugriff für Sprachaufnahmen und Transkription mit KI-gestützter Emotions-Analyse.</string>
+
+    <!-- REMOVED: NSCameraUsageDescription - App does not use camera, causes user confusion -->
+
+    <!-- App Store Requirements -->
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+
+    <!-- Copyright (Required by Apple for App Store) -->
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Marc Allgeier. All rights reserved.</string>
+
+    <!-- Export Compliance (avoids manual questions during App Store submission) -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
+    <!-- Minimum macOS Version (10.15 Catalina) -->
+    <key>LSMinimumSystemVersion</key>
+    <string>10.15</string>
 </dict>
 </plist>

@@ -18,7 +18,6 @@ mod analysis;
 mod storage;
 mod mlx_llm;
 mod export;
-mod hotkey_agent;
 mod file_io;
 mod window;
 pub(crate) mod utils; // pub(crate) for sub-module access
@@ -31,6 +30,5 @@ pub use analysis::*;
 pub use storage::*;
 pub use mlx_llm::*;
 pub use export::*;
-pub use hotkey_agent::*;
 pub use file_io::*;
 pub use window::*;
