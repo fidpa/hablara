@@ -1,0 +1,235 @@
+# ============================================================================
+# Hablará - App Store Connect Upload Workflow
+# ============================================================================
+# Builds a signed Universal Binary and uploads to App Store Connect.
+#
+# Prerequisites (GitHub Secrets) - run scripts-dev/export-github-secrets.sh:
+#   - APPLE_CERTIFICATES_BASE64: Base64-encoded .p12 (contains both certs)
+#   - APPLE_CERTIFICATES_PASSWORD: Password for .p12
+#   - PROVISIONING_PROFILE_BASE64: Base64-encoded .provisionprofile
+#   - ASC_API_KEY_ID: App Store Connect API Key ID
+#   - ASC_API_ISSUER_ID: App Store Connect Issuer ID
+#   - ASC_API_PRIVATE_KEY_BASE64: Base64-encoded .p8 private key
+#
+# Usage:
+#   1. Go to Actions tab in GitHub
+#   2. Select "App Store Release"
+#   3. Click "Run workflow"
+#   4. Enter version (must match tauri.conf.json)
+# ============================================================================
+
+name: App Store Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.3)'
+        required: true
+        type: string
+
+env:
+  APP_NAME: "Hablará"
+  APP_IDENTIFIER: "com.fidpa.hablara"
+
+jobs:
+  build-and-upload:
+    name: Build & Upload to App Store
+    runs-on: macos-14
+
+    steps:
+      # ========================================
+      # 1. Checkout & Validation
+      # ========================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate version
+        run: |
+          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          if [ "$TAURI_VERSION" != "${{ inputs.version }}" ]; then
+            echo "❌ Version mismatch! Input: ${{ inputs.version }}, tauri.conf.json: $TAURI_VERSION"
+            exit 1
+          fi
+          echo "✅ Version validated: ${{ inputs.version }}"
+
+      # ========================================
+      # 2. Setup Build Environment
+      # ========================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ========================================
+      # 3. Import Certificates
+      # ========================================
+      - name: Import Apple certificates
+        env:
+          APPLE_CERTIFICATES_BASE64: ${{ secrets.APPLE_CERTIFICATES_BASE64 }}
+          APPLE_CERTIFICATES_PASSWORD: ${{ secrets.APPLE_CERTIFICATES_PASSWORD }}
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Import certificates
+          echo "$APPLE_CERTIFICATES_BASE64" | base64 --decode > $RUNNER_TEMP/certificates.p12
+          security import $RUNNER_TEMP/certificates.p12 \
+            -P "$APPLE_CERTIFICATES_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k $KEYCHAIN_PATH
+
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          # Provisioning profile
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > $RUNNER_TEMP/embedded.provisionprofile
+
+          echo "✅ Certificates imported"
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
+
+      - name: Extract certificate names
+        id: certs
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          DIST_CERT=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          INST_CERT=$(security find-identity -v $KEYCHAIN_PATH | grep "3rd Party Mac Developer Installer" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          echo "distribution_cert=$DIST_CERT" >> $GITHUB_OUTPUT
+          echo "installer_cert=$INST_CERT" >> $GITHUB_OUTPUT
+
+      # ========================================
+      # 4. Build Universal Binary
+      # ========================================
+      - name: Build Tauri app
+        run: pnpm tauri build --target universal-apple-darwin --bundles app
+
+      - name: Verify build
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
+          echo "✅ App: $APP_PATH"
+          du -sh "$APP_PATH"
+          lipo -info "$APP_PATH/Contents/MacOS/hablara"
+
+      # ========================================
+      # 5. Sign App Bundle
+      # ========================================
+      - name: Sign app bundle
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          # Embed provisioning profile
+          cp $RUNNER_TEMP/embedded.provisionprofile "$APP_PATH/Contents/embedded.provisionprofile"
+
+          # Sign
+          codesign --force --options runtime \
+            --sign "${{ steps.certs.outputs.distribution_cert }}" \
+            --keychain $KEYCHAIN_PATH \
+            --entitlements "src-tauri/entitlements.plist" \
+            "$APP_PATH"
+
+          codesign --verify --deep --strict "$APP_PATH"
+          echo "✅ App signed"
+
+      # ========================================
+      # 6. Create & Sign PKG
+      # ========================================
+      - name: Create signed PKG
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
+          PKG_PATH="${{ runner.temp }}/${{ env.APP_NAME }}-${{ inputs.version }}.pkg"
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          xcrun productbuild \
+            --sign "${{ steps.certs.outputs.installer_cert }}" \
+            --keychain $KEYCHAIN_PATH \
+            --component "$APP_PATH" /Applications \
+            "$PKG_PATH"
+
+          echo "✅ PKG created"
+          ls -lh "$PKG_PATH"
+          pkgutil --check-signature "$PKG_PATH"
+
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hablara-${{ inputs.version }}-macos-universal.pkg
+          path: ${{ runner.temp }}/${{ env.APP_NAME }}-${{ inputs.version }}.pkg
+          retention-days: 30
+
+      # ========================================
+      # 7. Upload to App Store Connect
+      # ========================================
+      - name: Setup API Key
+        env:
+          ASC_API_PRIVATE_KEY_BASE64: ${{ secrets.ASC_API_PRIVATE_KEY_BASE64 }}
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+        run: |
+          mkdir -p ~/.private_keys
+          echo "$ASC_API_PRIVATE_KEY_BASE64" | base64 --decode > ~/.private_keys/AuthKey_${ASC_API_KEY_ID}.p8
+
+      - name: Upload to App Store Connect
+        env:
+          ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+        run: |
+          PKG_PATH="${{ runner.temp }}/${{ env.APP_NAME }}-${{ inputs.version }}.pkg"
+
+          xcrun altool --upload-package "$PKG_PATH" \
+            --type macos \
+            --apiKey "$ASC_API_KEY_ID" \
+            --apiIssuer "$ASC_API_ISSUER_ID" \
+            --bundle-id "${{ env.APP_IDENTIFIER }}" \
+            --bundle-short-version-string "${{ inputs.version }}" \
+            --bundle-version "1"
+
+          echo "✅ Uploaded to App Store Connect"
+
+      # ========================================
+      # 8. Cleanup
+      # ========================================
+      - name: Cleanup
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
+          rm -f $RUNNER_TEMP/certificates.p12 $RUNNER_TEMP/embedded.provisionprofile
+          rm -rf ~/.private_keys
+
+      - name: Summary
+        run: |
+          echo "## ✅ App Store Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Architecture:** Universal (arm64 + x86_64)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build uploaded to App Store Connect. Check TestFlight in 5-15 minutes." >> $GITHUB_STEP_SUMMARY
