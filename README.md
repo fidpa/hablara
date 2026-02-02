@@ -299,7 +299,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 | **Tonalität** | Sprechweise-Analyse | Formell/Informell, Bestimmt/Zurückhaltend |
 | **Topic-Klassifizierung** | 7 Kategorien | Arbeit, Gesundheit, Beziehungen, etc. |
 
-- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen (Kontext über letzte 3 Nachrichten per React State)
+- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen (Kontext über letzte 3 Nachrichten per React State). Intelligente Abkürzungserkennung für psychologische Fachbegriffe (GFK, CBT, NVC)
 
 
 <details>
@@ -317,7 +317,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 - 4 Quadranten: Sachinhalt (blau), Selbstoffenbarung (lila), Beziehung (pink), Appell (orange)
 - Output: Potenzielle Missverständnisse + Kommunikations-Tipps
 
-**Wichtig:** Alle Features dienen der **Selbstreflexion**, nicht der klinischen Diagnostik.
+**Wichtig:** Alle Features dienen der **Selbstreflexion**, nicht der klinischen Diagnostik. KI-Accuracy-Disclaimer (EU AI Act Art. 52) in Tour und About-Section. Krisenhotline: Telefonseelsorge 0800 111 0 111 (24/7, kostenlos).
 
 </details>
 
@@ -329,6 +329,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 - **Sichere API Key Speicherung** – OS-native Verschlüsselung (Keychain/Credential Manager)
 - **Bundle-Size-Optimierung** – INT8-Quantization (-75% Model Size), DMG: 1.5 GB, App: 1.9 GB
 - **macOS-native Integration** – System Keychain, Code-Signed, Window State Persistence
+- **Robustheit** – 4 Error Boundaries isolieren Fehler auf Komponentenebene (Chat-Crash ≠ App-Crash)
 
 <details>
 <summary><b>Beispiel-Workflow</b> – Demo einer typischen Analyse</summary>
