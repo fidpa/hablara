@@ -431,9 +431,9 @@ Jetzt weiß ich, wie ich das angehen will."
 **Warum Multi-Anbieter LLM?**
 - User-Choice: Privacy (Ollama) vs. Speed (OpenAI) vs. Quality (Anthropic), kein Vendor Lock-in
 
-**Warum RAG Chatbot (78 Chunks)?**
-- LLM-Only halluziniert App-Fakten, RAG: 94-95% Accuracy
-- Context-Grounding reduziert Hallucinations signifikant (42-68% reduction, research-backed)
+**Warum RAG-Chatbot (78 Chunks)?**
+- Ohne RAG halluziniert das LLM – mit RAG: hohe Zuverlässigkeit
+- Kontextbasierte Antworten reduzieren Halluzinationen deutlich
 
 #### Security & Privacy
 
