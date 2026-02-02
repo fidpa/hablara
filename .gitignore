@@ -62,6 +62,10 @@ traces/
 secrets/
 credentials.json
 
+# Apple App Store Connect API Keys
+*.p8
+AuthKey_*.p8
+
 # Development Overrides
 *.local.json
 local-config.json

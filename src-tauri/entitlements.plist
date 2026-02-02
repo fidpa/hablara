@@ -26,18 +26,17 @@
     <true/>
 
     <!-- Keychain Access Groups (Required for tauri-plugin-keyring) -->
-    <!-- IMPORTANT: Replace TEAM_ID with actual Team ID after Apple Developer Account setup -->
     <key>keychain-access-groups</key>
     <array>
-        <string>$(AppIdentifierPrefix)com.fidpa.hablara</string>
+        <string>94H68V6M99.com.fidpa.hablara</string>
     </array>
 
     <!-- App Identity (Required for App Store) -->
     <key>com.apple.application-identifier</key>
-    <string>$(AppIdentifierPrefix)com.fidpa.hablara</string>
+    <string>94H68V6M99.com.fidpa.hablara</string>
 
     <!-- Team ID (Replace with actual Team ID) -->
     <key>com.apple.developer.team-identifier</key>
-    <string>TEAM_ID</string>
+    <string>94H68V6M99</string>
 </dict>
 </plist>

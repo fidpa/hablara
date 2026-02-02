@@ -84,7 +84,7 @@ describe('ChatWelcomeState', () => {
       render(<ChatWelcomeState />);
 
       expect(screen.getByText('Kommunikation verstehen')).toBeInTheDocument();
-      expect(screen.getByText('GFK, Kognitive Muster, Vier-Seiten-Modell')).toBeInTheDocument();
+      expect(screen.getByText('Vier-Seiten-Modell, GFK, Kognitive Muster')).toBeInTheDocument();
     });
 
     it('should display RAG chatbot card with correct content', () => {

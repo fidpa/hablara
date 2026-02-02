@@ -19,7 +19,7 @@ Object.defineProperty(global, "localStorage", {
 
 // Mock dependencies
 vi.mock("@/hooks/useTauri", () => ({
-  useTauri: () => ({ isTauri: true, isReady: true }),
+  useTauri: () => ({ isTauri: true, isReady: true, bringToFront: vi.fn() }),
 }));
 
 vi.mock("@/hooks/useHotkey", () => ({
