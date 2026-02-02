@@ -160,6 +160,29 @@ preflight_checks() {
 # Ollama Installation
 # ============================================================================
 
+# Start Ollama server (handles both app and CLI installations)
+start_ollama_server() {
+  # Try launchd first (Ollama.app installation)
+  if [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]]; then
+    launchctl load ~/Library/LaunchAgents/com.ollama.ollama.plist 2>/dev/null || true
+    return 0
+  fi
+
+  # Try opening Ollama.app (if installed in Applications)
+  if [[ -d "/Applications/Ollama.app" ]]; then
+    open -a Ollama 2>/dev/null || true
+    return 0
+  fi
+
+  # Fallback: start ollama serve in background
+  if command_exists ollama; then
+    nohup ollama serve &>/dev/null &
+    return 0
+  fi
+
+  return 1
+}
+
 install_ollama() {
   if command_exists ollama; then
     log_success "Ollama bereits installiert"
@@ -172,11 +195,7 @@ install_ollama() {
     # Ensure server is running
     if ! curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
       log_warning "Ollama Server läuft nicht, starte..."
-
-      # Try to start via launchd (if installed via app)
-      if [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]]; then
-        launchctl load ~/Library/LaunchAgents/com.ollama.ollama.plist 2>/dev/null || true
-      fi
+      start_ollama_server
 
       # Wait for server
       if ! wait_for_ollama; then
@@ -190,14 +209,39 @@ install_ollama() {
 
   log_info "Installiere Ollama..."
 
-  # Download and execute install script
-  if ! /bin/bash -c "$(curl -fsSL ${OLLAMA_INSTALL_URL})"; then
-    log_error "Ollama Installation fehlgeschlagen"
-    log_info "Manuelle Installation: ${OLLAMA_INSTALL_URL}"
+  # macOS: Use Homebrew if available, otherwise guide to manual installation
+  if command_exists brew; then
+    log_info "Verwende Homebrew für Installation..."
+
+    if ! brew install ollama; then
+      log_error "Homebrew Installation fehlgeschlagen"
+      log_info "Alternative: Lade Ollama.app von https://ollama.ai/download"
+      exit 1
+    fi
+
+    log_success "Ollama via Homebrew installiert"
+
+    # Start server
+    start_ollama_server
+
+  else
+    # No Homebrew - guide to manual installation
+    log_warning "Homebrew nicht gefunden"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "📥 Bitte Ollama manuell installieren:"
+    echo ""
+    echo "   Option 1 (empfohlen): Homebrew installieren, dann dieses Script erneut ausführen"
+    echo "      /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
+    echo ""
+    echo "   Option 2: Ollama.app herunterladen"
+    echo "      https://ollama.ai/download"
+    echo ""
+    echo "Nach der Installation dieses Script erneut ausführen."
+    echo ""
     exit 1
   fi
-
-  log_success "Ollama installiert"
 
   # Wait for server to start
   wait_for_ollama || exit 1
