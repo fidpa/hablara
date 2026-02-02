@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/fidpa/hablara/releases)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/fidpa/hablara/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
@@ -154,42 +154,66 @@ Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 │  │  • UI Components (Audio Recorder, Emotion Indicator)      │  │
 │  │  • State Management (React Hooks)                         │  │
 │  │  • Hotkey Listener (Ctrl+Shift+D)                         │  │
+│  │  • RAG (ONNX 118 MB + SQLite FTS5)                        │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                           │ IPC (Tauri Commands)                │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  Rust Backend (Tauri 2.0)                                 │  │
 │  │  • Native Audio (cpal @ 16kHz)                            │  │
+│  │  • Silero VAD (ONNX, 1.8 MB)                              │  │
 │  │  • Audio Analysis (12 Features)                           │  │
-│  │  • Storage Manager (SQLite Metadata)                      │  │
+│  │  • Storage Manager (JSON Dateien)                         │  │
 │  │  • whisper.cpp Integration (Sidecar)                      │  │
+│  │  • API Key Security (macOS Keychain)                      │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
-                              │
-            ┌─────────────────┼─────────────────┐
-            ▼                 ▼                 ▼
-     ┌───────────┐     ┌───────────┐     ┌───────────┐
-     │  Ollama   │     │  OpenAI   │     │ Anthropic │
-     │  (lokal)  │     │  (Cloud)  │     │  (Cloud)  │
-     │  :11434   │     │           │     │           │
-     └───────────┘     └───────────┘     └───────────┘
-          │
-          ▼
-     ┌───────────┐
-     │whisper.cpp│
-     │ (lokal)   │
-     └───────────┘
 ```
 
 ### Verarbeitungs-Pipeline
 
 ```
-Aufnahme → whisper.cpp → LLM-Analyse → Speicherung → UI
-  │           │              │             │          │
-  ▼           ▼              ▼             ▼          ▼
-Hotkey    Transkription   Dual-Track   Auto-Save   Ergebnis
-(Ctrl+    (lokal)         Emotion +    (lokal)     anzeigen
-Shift+D)                  Fehlschluss
-                          (parallel)
+Aufnahme → VAD → whisper.cpp → LLM-Analyse → Speicherung → UI
+   │        │         │             │             │          │
+   ▼        ▼         ▼             ▼             ▼          ▼
+Hotkey   Silero    Transkription  Dual-Track   Auto-Save   Ergebnis
+(Ctrl+   filtert   (lokal)        Emotion +    (lokal)     anzeigen
+Shift+D) Stille                   Fehlschluss
+                                  (parallel)
+```
+
+### KI-Modelle
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│   Audio-Pipeline                     RAG-Wissensassistent       │
+│                                                                 │
+│   Audio-Eingang                      User-Frage                 │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   ┌────────────────────┐            ┌────────────────────┐      │
+│   │ Silero VAD (1.8 MB)│            │ Embedding (118 MB) │      │
+│   │ filtert Stille     │            │ Semantische Suche  │      │
+│   └────────────────────┘            └────────────────────┘      │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   ┌────────────────────┐            ┌────────────────────┐      │
+│   │ whisper.cpp (1.6GB)│            │ SQLite FTS5        │      │
+│   │ Speech-to-Text     │            │ 78 Wissens-Chunks  │      │
+│   └────────────────────┘            └────────────────────┘      │
+│        │                                  │                     │
+│        └───────────────┬──────────────────┘                     │
+│                        ▼                                        │
+│   ┌──────────────────────────────────────────────────────────┐  │
+│   │ LLMs (Multi-Provider, frei wählbar via Settings)         │  │
+│   │ • Ollama (lokal, 2-4s, gratis, Datenschutz)              │  │
+│   │ • OpenAI (Cloud, 0.5-2s, günstig, Geschwindigkeit)       │  │
+│   │ • Anthropic (Cloud, 0.5-2s, teurer, Qualität)            │  │
+│   └──────────────────────────────────────────────────────────┘  │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   7 Analysen                         Chat-Antwort               │
+│   (Emotion, GFK, etc.)               (kontextbasiert)           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Tech-Stack (3-Tier Architektur)
@@ -199,14 +223,15 @@ Shift+D)                  Fehlschluss
 | **Frontend** | Next.js 14, React 18, TailwindCSS | UI, State Management |
 | **Desktop** | Tauri 2.0, Rust 1.70+ | Native Audio, IPC, Storage |
 | **AI/ML** | whisper.cpp (german-turbo), Ollama (qwen2.5:7b) | STT, LLM Enrichment |
-| **Embedding** | paraphrase-multilingual-MiniLM-L12-v2 (INT8) | RAG Semantic Search |
+| **VAD** | Silero VAD v4 (ONNX, 1.8 MB) | Voice Activity Detection |
+| **Embedding** | paraphrase-multilingual-MiniLM-L12-v2 (ONNX INT8, 118 MB) | RAG Semantic Search |
 | **Security** | tauri-plugin-keyring | API Key Verschlüsselung |
 
 ---
 
 ## Datenschutzkonzept
 
-**100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Kontrolle über deine Daten.
+**100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Datenkontrolle.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -259,7 +284,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 
 - **Hotkey-Aktivierung** – Starte die Aufnahme mit Ctrl+Shift+D aus jeder Anwendung
 - **Native Audio-Aufnahme** – Professionelle Audioqualität für präzise Transkription (cpal @ 16kHz)
-- **Lokale Transkription** – Deine Audio-Daten bleiben auf deinem Gerät (whisper.cpp + MLX-Whisper optional)
+- **Lokale Transkription** – Audio-Daten bleiben lokal auf dem Gerät (whisper.cpp + MLX-Whisper optional)
 - **LED-Pegelanzeige** – 10-Segment Visualisierung während der Aufnahme (6 grün/2 orange/2 rot)
 
 **AI-Enrichment (7 psychologisch-fundierte Analysen):**
@@ -274,7 +299,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 | **Tonalität** | Sprechweise-Analyse | Formell/Informell, Bestimmt/Zurückhaltend |
 | **Topic-Klassifizierung** | 7 Kategorien | Arbeit, Gesundheit, Beziehungen, etc. |
 
-- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen zur App
+- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen (Kontext über letzte 3 Nachrichten per React State)
 
 
 <details>
@@ -368,7 +393,7 @@ Jetzt weiß ich, wie ich das angehen will."
 **Performance**:
 - **Audio-Analyse**: Rust-native (12 Features)
 - **LLM Enrichment**: Parallel-Processing für minimale Latenz
-- **Bundle Size**: Optimiert via INT8 ONNX Quantization (113 MB statt 449 MB)
+- **Bundle Size**: 2 ONNX-Modelle (VAD 1.8 MB + Embedding 118 MB), Embedding INT8-quantisiert (-75%)
 
 **Robustheit**:
 - **spawn_blocking Pattern**: Non-blocking I/O für Storage (verhindert 500-Errors)
@@ -459,7 +484,7 @@ Jetzt weiß ich, wie ich das angehen will."
 
 ### 1. Repository clonen mit Git LFS
 
-**Wichtig:** Hablará nutzt Git LFS für große ONNX-Modelle (113 MB, erforderlich für RAG-Feature).
+**Wichtig:** Hablará nutzt Git LFS für große Modelle (Whisper 1.6 GB + Embedding 118 MB).
 
 ```bash
 # Git LFS installieren (einmalig)
@@ -470,9 +495,9 @@ git lfs install
 git clone https://github.com/fidpa/hablara.git
 cd hablara
 
-# Verifizieren: ONNX-Modell sollte ~112 MB groß sein
+# Verifizieren: Embedding-Modell sollte ~118 MB groß sein
 ls -lh public/models/onnx-models/paraphrase-multilingual-MiniLM-L12-v2-onnx/onnx/model_quantized.onnx
-# Erwartete Ausgabe: -rw-r--r--  1 user  staff  112M  model_quantized.onnx
+# Erwartete Ausgabe: -rw-r--r--  1 user  staff  118M  model_quantized.onnx
 ```
 
 **Ohne Git LFS:** RAG-Feature (Chatbot) funktioniert nicht (kein Embedding-Modell verfügbar).
@@ -608,4 +633,4 @@ Hablará unterstützt drei LLM-Anbieter:
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.2 | **Stand:** 2026-02-01
+**Autor:** Marc Allgeier | **Version:** 1.0.3 | **Stand:** 2026-02-02
