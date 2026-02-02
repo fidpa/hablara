@@ -28,9 +28,15 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: app-store-release
+  cancel-in-progress: false
+
 env:
   APP_NAME: "Hablará"
   APP_IDENTIFIER: "com.fidpa.hablara"
+  # Apple ID from App Store Connect (Meine Apps → Hablará → Allgemeine Informationen)
+  APPLE_ID: "6758584671"
 
 jobs:
   build-and-upload:
@@ -64,7 +70,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Setup pnpm cache
         uses: actions/cache@v4
@@ -86,7 +92,121 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ========================================
-      # 3. Import Certificates
+      # 3. Build whisper.cpp & Download Model
+      # ========================================
+      - name: Cache whisper model
+        id: cache-whisper-model
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper german-turbo model
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p src-tauri/models
+          echo "⬇️ Downloading german-turbo model (1.62 GB)..."
+          curl -L --progress-bar \
+            "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" \
+            -o src-tauri/models/ggml-german-turbo.bin
+          ls -lh src-tauri/models/ggml-german-turbo.bin
+          echo "✅ Model downloaded"
+
+      - name: Build whisper.cpp for Universal Binary
+        run: |
+          set -e  # Exit on any error
+
+          echo "📦 Cloning whisper.cpp..."
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          cd /tmp/whisper-build
+
+          # Build for aarch64 (Apple Silicon with Metal)
+          echo "🔨 Building for aarch64 (Metal)..."
+          cmake -B build-arm64 \
+            -S . \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DGGML_METAL=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWHISPER_BUILD_EXAMPLES=ON
+
+          if [ $? -ne 0 ]; then
+            echo "❌ CMake configuration failed for arm64"
+            exit 1
+          fi
+
+          cmake --build build-arm64 --config Release -j$(sysctl -n hw.ncpu)
+
+          if [ $? -ne 0 ]; then
+            echo "❌ CMake build failed for arm64"
+            exit 1
+          fi
+
+          # Build for x86_64 (Intel)
+          # GGML_NATIVE=OFF is critical for cross-compiling on ARM64 runner
+          # Without it, cmake uses -mcpu=native which results in "apple-m1" - invalid for x86_64
+          echo "🔨 Building for x86_64..."
+          cmake -B build-x64 \
+            -S . \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DGGML_NATIVE=OFF \
+            -DGGML_METAL=OFF
+
+          if [ $? -ne 0 ]; then
+            echo "❌ CMake configuration failed for x86_64"
+            exit 1
+          fi
+
+          cmake --build build-x64 --config Release -j$(sysctl -n hw.ncpu)
+
+          if [ $? -ne 0 ]; then
+            echo "❌ CMake build failed for x86_64"
+            exit 1
+          fi
+
+          # Find the built binaries (use only whisper-cli, not main which is just deprecation warning)
+          echo "🔍 Searching for whisper-cli binaries..."
+          ARM_BIN="build-arm64/bin/whisper-cli"
+          X64_BIN="build-x64/bin/whisper-cli"
+
+          if [ ! -f "$ARM_BIN" ]; then
+            echo "❌ arm64 binary not found at $ARM_BIN"
+            echo "Available files in build-arm64/bin:"
+            ls -la build-arm64/bin/ || true
+            exit 1
+          fi
+
+          if [ ! -f "$X64_BIN" ]; then
+            echo "❌ x86_64 binary not found at $X64_BIN"
+            echo "Available files in build-x64/bin:"
+            ls -la build-x64/bin/ || true
+            exit 1
+          fi
+
+          # Verify architectures
+          echo "🔍 Verifying binary architectures..."
+          lipo -info "$ARM_BIN"
+          lipo -info "$X64_BIN"
+
+          # Install to Tauri binaries directory
+          mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
+          cp "$ARM_BIN" $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin
+          cp "$X64_BIN" $GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-apple-darwin
+          chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-*
+
+          echo "✅ whisper.cpp built for Universal Binary"
+          ls -lh $GITHUB_WORKSPACE/src-tauri/binaries/
+
+          # Add x86_64 resource to tauri.conf.json for universal build
+          # (not in repo because local dev only needs aarch64)
+          jq '.bundle.resources += ["binaries/whisper-x86_64-apple-darwin"]' \
+            $GITHUB_WORKSPACE/src-tauri/tauri.conf.json > /tmp/tauri.conf.json.tmp
+          mv /tmp/tauri.conf.json.tmp $GITHUB_WORKSPACE/src-tauri/tauri.conf.json
+          echo "✅ Added x86_64 resource to tauri.conf.json"
+
+      # ========================================
+      # 4. Import Certificates
       # ========================================
       - name: Import Apple certificates
         env:
@@ -102,8 +222,8 @@ jobs:
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
-          # Import certificates
-          echo "$APPLE_CERTIFICATES_BASE64" | base64 --decode > $RUNNER_TEMP/certificates.p12
+          # Import certificates (base64 -d is POSIX-compatible)
+          echo "$APPLE_CERTIFICATES_BASE64" | base64 -d > $RUNNER_TEMP/certificates.p12
           security import $RUNNER_TEMP/certificates.p12 \
             -P "$APPLE_CERTIFICATES_PASSWORD" \
             -A -t cert -f pkcs12 \
@@ -113,22 +233,40 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
 
           # Provisioning profile
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > $RUNNER_TEMP/embedded.provisionprofile
+          echo "$PROVISIONING_PROFILE_BASE64" | base64 -d > $RUNNER_TEMP/embedded.provisionprofile
 
           echo "✅ Certificates imported"
           security find-identity -v -p codesigning $KEYCHAIN_PATH
 
-      - name: Extract certificate names
+      - name: Extract certificate SHA-1 hashes
         id: certs
         run: |
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          DIST_CERT=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/')
-          INST_CERT=$(security find-identity -v $KEYCHAIN_PATH | grep "3rd Party Mac Developer Installer" | head -1 | sed 's/.*"\(.*\)"/\1/')
-          echo "distribution_cert=$DIST_CERT" >> $GITHUB_OUTPUT
-          echo "installer_cert=$INST_CERT" >> $GITHUB_OUTPUT
+
+          # Use SHA-1 hash instead of name to avoid "ambiguous" error when cert appears twice
+          # Format: "  1) HASH "Name""  -> extract HASH
+          DIST_HASH=$(security find-identity -v -p codesigning $KEYCHAIN_PATH | grep "Apple Distribution" | head -1 | awk '{print $2}')
+          INST_HASH=$(security find-identity -v $KEYCHAIN_PATH | grep "3rd Party Mac Developer Installer" | head -1 | awk '{print $2}')
+
+          if [ -z "$DIST_HASH" ]; then
+            echo "::error::Apple Distribution certificate not found in keychain"
+            security find-identity -v -p codesigning $KEYCHAIN_PATH
+            exit 1
+          fi
+          if [ -z "$INST_HASH" ]; then
+            echo "::error::3rd Party Mac Developer Installer certificate not found in keychain"
+            security find-identity -v $KEYCHAIN_PATH
+            exit 1
+          fi
+
+          echo "✅ Distribution cert SHA-1: $DIST_HASH"
+          echo "✅ Installer cert SHA-1: $INST_HASH"
+
+          echo "distribution_cert=$DIST_HASH" >> $GITHUB_OUTPUT
+          echo "installer_cert=$INST_HASH" >> $GITHUB_OUTPUT
 
       # ========================================
-      # 4. Build Universal Binary
+      # 5. Build Universal Binary
       # ========================================
       - name: Build Tauri app
         run: pnpm tauri build --target universal-apple-darwin --bundles app
@@ -141,44 +279,107 @@ jobs:
           lipo -info "$APP_PATH/Contents/MacOS/hablara"
 
       # ========================================
-      # 5. Sign App Bundle
+      # 6. Sign App Bundle
       # ========================================
       - name: Sign app bundle
         run: |
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          CERT="${{ steps.certs.outputs.distribution_cert }}"
+          ENTITLEMENTS="src-tauri/entitlements.plist"
 
           # Embed provisioning profile
           cp $RUNNER_TEMP/embedded.provisionprofile "$APP_PATH/Contents/embedded.provisionprofile"
 
-          # Sign
+          # Sign all nested binaries first (deep signing)
+          find "$APP_PATH/Contents/MacOS" -type f -perm +111 | while read binary; do
+            echo "Signing binary: $binary"
+            codesign --force --options runtime \
+              --sign "$CERT" \
+              --keychain $KEYCHAIN_PATH \
+              --entitlements "$ENTITLEMENTS" \
+              "$binary"
+          done
+
+          # Sign frameworks if any
+          if [ -d "$APP_PATH/Contents/Frameworks" ]; then
+            find "$APP_PATH/Contents/Frameworks" -name "*.dylib" -o -name "*.framework" | while read item; do
+              echo "Signing framework: $item"
+              codesign --force --options runtime \
+                --sign "$CERT" \
+                --keychain $KEYCHAIN_PATH \
+                "$item" 2>/dev/null || true
+            done
+          fi
+
+          # Sign the entire bundle
           codesign --force --options runtime \
-            --sign "${{ steps.certs.outputs.distribution_cert }}" \
+            --sign "$CERT" \
             --keychain $KEYCHAIN_PATH \
-            --entitlements "src-tauri/entitlements.plist" \
+            --entitlements "$ENTITLEMENTS" \
             "$APP_PATH"
 
+          # Verify
           codesign --verify --deep --strict "$APP_PATH"
-          echo "✅ App signed"
+          echo "✅ App signed and verified"
 
       # ========================================
-      # 6. Create & Sign PKG
+      # 7. Create & Sign PKG
       # ========================================
       - name: Create signed PKG
         run: |
+          set -e
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
           PKG_PATH="${{ runner.temp }}/${{ env.APP_NAME }}-${{ inputs.version }}.pkg"
+          COMPONENT_PKG="${{ runner.temp }}/component.pkg"
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          INST_CERT="${{ steps.certs.outputs.installer_cert }}"
 
-          xcrun productbuild \
-            --sign "${{ steps.certs.outputs.installer_cert }}" \
+          # Step 1: Create component package with pkgbuild (fixes BOM/Payload mismatch)
+          echo "📦 Creating component package with pkgbuild..."
+          pkgbuild \
+            --component "$APP_PATH" \
+            --install-location /Applications \
+            --sign "$INST_CERT" \
             --keychain $KEYCHAIN_PATH \
-            --component "$APP_PATH" /Applications \
+            "$COMPONENT_PKG"
+
+          echo "✅ Component PKG created: $(ls -lh "$COMPONENT_PKG" | awk '{print $5}')"
+
+          # Step 2: Create distribution.xml
+          echo "📝 Creating distribution.xml..."
+          cat > "${{ runner.temp }}/distribution.xml" << 'DISTXML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <installer-gui-script minSpecVersion="2">
+              <title>Hablará</title>
+              <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+              <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+              <choices-outline>
+                  <line choice="default"/>
+              </choices-outline>
+              <choice id="default" title="Hablará">
+                  <pkg-ref id="com.fidpa.hablara"/>
+              </choice>
+              <pkg-ref id="com.fidpa.hablara" version="${{ inputs.version }}" installKBytes="0">component.pkg</pkg-ref>
+          </installer-gui-script>
+          DISTXML
+
+          # Step 3: Create final product archive with productbuild
+          echo "📦 Creating final PKG with productbuild..."
+          productbuild \
+            --distribution "${{ runner.temp }}/distribution.xml" \
+            --package-path "${{ runner.temp }}" \
+            --sign "$INST_CERT" \
+            --keychain $KEYCHAIN_PATH \
             "$PKG_PATH"
 
-          echo "✅ PKG created"
+          echo "✅ Final PKG created"
           ls -lh "$PKG_PATH"
           pkgutil --check-signature "$PKG_PATH"
+
+          # Verify PKG contents
+          echo "📋 PKG contents:"
+          pkgutil --payload-files "$PKG_PATH" | head -20 || true
 
       - name: Upload PKG artifact
         uses: actions/upload-artifact@v4
@@ -188,7 +389,7 @@ jobs:
           retention-days: 30
 
       # ========================================
-      # 7. Upload to App Store Connect
+      # 8. Upload to App Store Connect
       # ========================================
       - name: Setup API Key
         env:
@@ -196,9 +397,11 @@ jobs:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
         run: |
           mkdir -p ~/.private_keys
-          echo "$ASC_API_PRIVATE_KEY_BASE64" | base64 --decode > ~/.private_keys/AuthKey_${ASC_API_KEY_ID}.p8
+          echo "$ASC_API_PRIVATE_KEY_BASE64" | base64 -d > ~/.private_keys/AuthKey_${ASC_API_KEY_ID}.p8
+          chmod 600 ~/.private_keys/AuthKey_${ASC_API_KEY_ID}.p8
 
       - name: Upload to App Store Connect
+        timeout-minutes: 30
         env:
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
@@ -207,16 +410,17 @@ jobs:
 
           xcrun altool --upload-package "$PKG_PATH" \
             --type macos \
+            --apple-id "${{ env.APPLE_ID }}" \
             --apiKey "$ASC_API_KEY_ID" \
             --apiIssuer "$ASC_API_ISSUER_ID" \
             --bundle-id "${{ env.APP_IDENTIFIER }}" \
             --bundle-short-version-string "${{ inputs.version }}" \
-            --bundle-version "1"
+            --bundle-version "${{ github.run_number }}"
 
           echo "✅ Uploaded to App Store Connect"
 
       # ========================================
-      # 8. Cleanup
+      # 9. Cleanup
       # ========================================
       - name: Cleanup
         if: always()

@@ -102,6 +102,9 @@ core
 /src-tauri/resources/models/*.onnx
 /src-tauri/resources/models/*.bin
 
+# EXCEPTION: Silero VAD model MUST be tracked (required for build)
+!/src-tauri/resources/models/silero_vad_v4.onnx
+
 # EXCEPTION: public/models/ MUST be tracked (RAG ONNX Bundle for offline operation)
 !/public/models/
 !/public/models/**
