@@ -54,10 +54,7 @@
     "longDescription": "Hablará: Desktop app for voice recording with real-time transcription, emotion analysis, and argumentation fallacy detection.",
     "macOS": {
       "entitlements": "./entitlements.plist",
-      "minimumSystemVersion": "10.15",
-      "info": {
-        "CFBundleDisplayName": "Hablará"
-      }
+      "minimumSystemVersion": "10.15"
     }
   },
   "plugins": {

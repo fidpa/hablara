@@ -271,12 +271,16 @@ jobs:
       - name: Build Tauri app
         run: pnpm tauri build --target universal-apple-darwin --bundles app
 
-      - name: Verify build
+      - name: Verify build and set display name
         run: |
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
           echo "✅ App: $APP_PATH"
           du -sh "$APP_PATH"
           lipo -info "$APP_PATH/Contents/MacOS/hablara"
+
+          # Set CFBundleDisplayName for accented display name in Finder/Dock
+          plutil -replace CFBundleDisplayName -string "Hablará" "$APP_PATH/Contents/Info.plist"
+          echo "✅ CFBundleDisplayName set to 'Hablará'"
 
       # ========================================
       # 6. Sign App Bundle
