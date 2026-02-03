@@ -1,3 +1,17 @@
+# ============================================================================
+# Hablará - GitHub Release Workflow
+# ============================================================================
+# Builds signed DMGs for macOS (arm64 + x86_64) and creates a GitHub Release.
+#
+# Trigger: Push a tag matching 'v*' (e.g., v1.0.3)
+#
+# Prerequisites:
+#   - APPLE_CERTIFICATE_BASE64: Base64-encoded Developer ID certificate
+#   - APPLE_CERTIFICATE_PASSWORD: Certificate password
+#   - APPLE_SIGNING_IDENTITY: e.g., "Developer ID Application: ..."
+#   - APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID: For notarization (optional)
+# ============================================================================
+
 name: Release
 
 on:
@@ -8,16 +22,21 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_NAME: "Hablará"
+
 jobs:
   build-macos:
-    name: Build macOS
+    name: Build macOS (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
+            arch: arm64
             runner: macos-14
           - target: x86_64-apple-darwin
+            arch: x86_64
             runner: macos-13
 
     runs-on: ${{ matrix.runner }}
@@ -32,37 +51,124 @@ jobs:
           node-version: '20'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Cache Cargo
-        uses: actions/cache@v4
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            src-tauri/target/
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: './src-tauri -> target'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # ========================================
+      # Build whisper.cpp for target architecture
+      # ========================================
+      - name: Cache whisper model
+        id: cache-whisper-model
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper german-turbo model
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p src-tauri/models
+          echo "⬇️ Downloading german-turbo model (1.62 GB)..."
+          curl -L --progress-bar \
+            "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" \
+            -o src-tauri/models/ggml-german-turbo.bin
+          ls -lh src-tauri/models/ggml-german-turbo.bin
+          echo "✅ Model downloaded"
+
+      - name: Build whisper.cpp
+        run: |
+          set -e
+          echo "📦 Cloning whisper.cpp..."
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          cd /tmp/whisper-build
+
+          # Configure based on architecture
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            echo "🔨 Building for arm64 (Metal)..."
+            cmake -B build \
+              -DCMAKE_OSX_ARCHITECTURES=arm64 \
+              -DGGML_METAL=ON \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DWHISPER_BUILD_EXAMPLES=ON
+          else
+            echo "🔨 Building for x86_64..."
+            cmake -B build \
+              -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DWHISPER_BUILD_EXAMPLES=ON \
+              -DGGML_NATIVE=OFF \
+              -DGGML_METAL=OFF
+          fi
+
+          cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+
+          # Install binary
+          mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
+          cp build/bin/whisper-cli $GITHUB_WORKSPACE/src-tauri/binaries/whisper-${{ matrix.target }}
+          chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-${{ matrix.target }}
+
+          echo "✅ whisper.cpp built"
+          ls -lh $GITHUB_WORKSPACE/src-tauri/binaries/
+          lipo -info $GITHUB_WORKSPACE/src-tauri/binaries/whisper-${{ matrix.target }}
+
+      # ========================================
+      # Build Tauri App
+      # ========================================
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Add these for code signing
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Hablará ${{ github.ref_name }}'
-          releaseBody: 'See the assets below to download the app for macOS.'
+          releaseBody: |
+            ## Hablará ${{ github.ref_name }}
+
+            Voice Intelligence Platform - Sprache aufnehmen, transkribieren und KI-gestützt anreichern.
+
+            ### Downloads
+
+            | Architektur | Datei |
+            |-------------|-------|
+            | Apple Silicon (M1/M2/M3/M4) | `Hablará_*_aarch64.dmg` |
+            | Intel | `Hablará_*_x64.dmg` |
+
+            ### Voraussetzungen
+
+            - macOS 12.0 oder neuer
+            - [Ollama](https://ollama.com) für lokale LLM-Verarbeitung (empfohlen)
+
+            ### Schnellstart
+
+            ```bash
+            # Ollama Setup (optional, für lokale KI)
+            brew install ollama
+            ollama pull qwen2.5:7b
+            ```
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}

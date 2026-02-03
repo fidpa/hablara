@@ -346,9 +346,9 @@ jobs:
 
           echo "✅ Component PKG created: $(ls -lh "$COMPONENT_PKG" | awk '{print $5}')"
 
-          # Step 2: Create distribution.xml
+          # Step 2: Create distribution.xml (no quotes on EOF to allow variable expansion)
           echo "📝 Creating distribution.xml..."
-          cat > "${{ runner.temp }}/distribution.xml" << 'DISTXML'
+          cat > "${{ runner.temp }}/distribution.xml" << EOF
           <?xml version="1.0" encoding="utf-8"?>
           <installer-gui-script minSpecVersion="2">
               <title>Hablará</title>
@@ -362,7 +362,7 @@ jobs:
               </choice>
               <pkg-ref id="com.fidpa.hablara" version="${{ inputs.version }}" installKBytes="0">component.pkg</pkg-ref>
           </installer-gui-script>
-          DISTXML
+          EOF
 
           # Step 3: Create final product archive with productbuild
           echo "📦 Creating final PKG with productbuild..."
