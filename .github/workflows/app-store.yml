@@ -33,7 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  APP_NAME: "Hablará"
+  APP_NAME: "Hablara"
   APP_IDENTIFIER: "com.fidpa.hablara"
   # Apple ID from App Store Connect (Meine Apps → Hablará → Allgemeine Informationen)
   APPLE_ID: "6758584671"
@@ -331,55 +331,55 @@ jobs:
           set -e
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
           PKG_PATH="${{ runner.temp }}/${{ env.APP_NAME }}-${{ inputs.version }}.pkg"
-          COMPONENT_PKG="${{ runner.temp }}/component.pkg"
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           INST_CERT="${{ steps.certs.outputs.installer_cert }}"
 
-          # Step 1: Create component package with pkgbuild (fixes BOM/Payload mismatch)
-          echo "📦 Creating component package with pkgbuild..."
-          pkgbuild \
-            --component "$APP_PATH" \
-            --install-location /Applications \
+          # Verify app exists and has content
+          echo "📋 Verifying app bundle..."
+          ls -la "$APP_PATH/"
+          ls -la "$APP_PATH/Contents/"
+          ls -la "$APP_PATH/Contents/MacOS/"
+          file "$APP_PATH/Contents/MacOS/hablara"
+
+          # Verify code signature before PKG creation
+          echo "🔏 Verifying app signature..."
+          codesign -dvvv "$APP_PATH"
+
+          # Copy app to temp location using ditto (preserves Extended Attributes + symlinks)
+          TEMP_APP="${{ runner.temp }}/${{ env.APP_NAME }}.app"
+          echo "📦 Copying app with ditto (preserves xattrs)..."
+          ditto "$APP_PATH" "$TEMP_APP"
+
+          # Verify ditto copy
+          echo "📋 Verifying ditto copy..."
+          codesign -dvvv "$TEMP_APP"
+
+          # Create signed PKG with productbuild --component (App Store required method)
+          # Reference: https://v2.tauri.app/distribute/app-store/
+          echo "📦 Creating PKG with productbuild --component..."
+          xcrun productbuild \
             --sign "$INST_CERT" \
-            --keychain $KEYCHAIN_PATH \
-            "$COMPONENT_PKG"
-
-          echo "✅ Component PKG created: $(ls -lh "$COMPONENT_PKG" | awk '{print $5}')"
-
-          # Step 2: Create distribution.xml (no quotes on EOF to allow variable expansion)
-          echo "📝 Creating distribution.xml..."
-          cat > "${{ runner.temp }}/distribution.xml" << EOF
-          <?xml version="1.0" encoding="utf-8"?>
-          <installer-gui-script minSpecVersion="2">
-              <title>Hablará</title>
-              <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
-              <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
-              <choices-outline>
-                  <line choice="default"/>
-              </choices-outline>
-              <choice id="default" title="Hablará">
-                  <pkg-ref id="com.fidpa.hablara"/>
-              </choice>
-              <pkg-ref id="com.fidpa.hablara" version="${{ inputs.version }}" installKBytes="0">component.pkg</pkg-ref>
-          </installer-gui-script>
-          EOF
-
-          # Step 3: Create final product archive with productbuild
-          echo "📦 Creating final PKG with productbuild..."
-          productbuild \
-            --distribution "${{ runner.temp }}/distribution.xml" \
-            --package-path "${{ runner.temp }}" \
-            --sign "$INST_CERT" \
-            --keychain $KEYCHAIN_PATH \
+            --keychain "$KEYCHAIN_PATH" \
+            --component "$TEMP_APP" /Applications \
             "$PKG_PATH"
 
-          echo "✅ Final PKG created"
+          echo "✅ PKG created"
           ls -lh "$PKG_PATH"
+
+          # Verify signature
+          echo "🔏 Verifying PKG signature..."
           pkgutil --check-signature "$PKG_PATH"
 
           # Verify PKG contents
-          echo "📋 PKG contents:"
-          pkgutil --payload-files "$PKG_PATH" | head -20 || true
+          echo "📋 PKG payload files (first 30):"
+          pkgutil --payload-files "$PKG_PATH" | head -30 || echo "Warning: Could not list payload files"
+
+          # Expand and verify PKG structure
+          echo "📋 Expanding PKG to verify structure..."
+          EXPAND_DIR="${{ runner.temp }}/pkg-expanded"
+          pkgutil --expand "$PKG_PATH" "$EXPAND_DIR" || echo "Warning: Could not expand PKG"
+          ls -la "$EXPAND_DIR/" || true
+          ls -la "$EXPAND_DIR/"*.pkg/ 2>/dev/null || true
 
       - name: Upload PKG artifact
         uses: actions/upload-artifact@v4

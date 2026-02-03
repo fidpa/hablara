@@ -10,7 +10,7 @@ This directory contains Tauri 2.0 capability definitions that control which syst
 
 For a detailed security analysis of each permission, see:
 
-**📖 [Security Capabilities Documentation](../../docs/reference/SECURITY_CAPABILITIES.md)**
+**📖 [Security Capabilities Documentation](../../docs/reference/security/SECURITY_CAPABILITIES.md)**
 
 Key findings:
 - ✅ **P0 Fixed:** Added missing `fs:allow-*-read` permissions (recordings load correctly)

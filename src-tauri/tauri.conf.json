@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Hablará",
+  "productName": "Hablara",
   "version": "1.0.3",
   "identifier": "com.fidpa.hablara",
   "build": {
@@ -54,7 +54,10 @@
     "longDescription": "Hablará: Desktop app for voice recording with real-time transcription, emotion analysis, and argumentation fallacy detection.",
     "macOS": {
       "entitlements": "./entitlements.plist",
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "info": {
+        "CFBundleDisplayName": "Hablará"
+      }
     }
   },
   "plugins": {
