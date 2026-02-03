@@ -233,6 +233,8 @@ Shift+D) Stille                   Fehlschluss
 
 **100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Datenkontrolle.
 
+Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschutz/)
+
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                   100% Lokale Option                      │
@@ -268,6 +270,36 @@ Shift+D) Stille                   Fehlschluss
 | **Keine Cloud-Pflicht** | whisper.cpp + Ollama vollständig offline |
 | **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
 | **Open-Source** | Transparenz durch offenen Code |
+
+### Sicherheitsarchitektur
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                   Sicherheitsarchitektur                      │
+├───────────────────────────────────────────────────────────────┤
+│                                                               │
+│  Input:    ┌────────────┐  ┌────────────┐  ┌────────────┐     │
+│            │ User Input │─▶│    Zod     │─▶│ XSS-Filter │     │
+│            └────────────┘  └────────────┘  └────────────┘     │
+│                                                               │
+│  Output:   ┌────────────┐  ┌────────────┐                     │
+│            │ LLM Output │─▶│SafetyFilter│─▶ Display           │
+│            └────────────┘  └────────────┘                     │
+│                                                               │
+│  Storage:  ┌───────────────────────────────────────────┐      │
+│            │ Lokal: ~/Hablara/ (keine Cloud-DB)        │      │
+│            │ API Keys: OS Keychain (AES-256)           │      │
+│            └───────────────────────────────────────────┘      │
+│                                                               │
+└───────────────────────────────────────────────────────────────┘
+```
+
+- **Keine Cloud-Datenbank** – Keine Remote-Angriffsfläche, alle Daten lokal
+- **Verschlüsselte Credentials** – API Keys nur im OS Keychain, niemals Klartext
+- **Input Validation** – Alle User-Eingaben via Zod Schema validiert
+- **XSS Protection** – LLM-Output wird vor Rendering sanitized
+- **Safety Filter** – Blockiert problematische LLM-Outputs
+- **App Sandbox** – macOS Hardened Runtime begrenzt Systemzugriff auf das Notwendige
 
 ### Abgrenzung zu Gesundheits-Apps
 
@@ -431,7 +463,19 @@ Jetzt weiß ich, wie ich das angehen will."
 - Browser ignoriert 16kHz Request (liefert 48kHz). VAD: 0% vs. >90% mit cpal
 - FFT-Resampling (rubato) garantiert Whisper-kompatible Sample-Rate
 
+**Warum Next.js 14 + React 18 pinned (nicht 15/19)?**
+- Tauri 2.0 Kompatibilität – neuere Versionen brechen Build
+- Bewusste Stabilität vor "Bleeding Edge"
+
 #### AI/ML Pipeline
+
+**Warum Silero VAD vor Whisper?**
+- Whisper halluziniert bei Stille ("Danke fürs Zuschauen!", Musik-Notationen)
+- VAD filtert Nicht-Sprache vor Transkription → 0% False Positives
+- 1.8 MB ONNX, <1ms Latenz, threshold-basiert (0.3)
+
+**Warum whisper.cpp (lokal) statt Cloud-STT?**
+- 100% Privacy, kostenlos, schnelle lokale Inferenz
 
 **Warum Dual-Track Emotion (Audio 40% + Text 60%)?**
 - Single-Track limitiert (nur Audio ODER Text), Dual-Track Fusion deutlich robuster
@@ -441,18 +485,14 @@ Jetzt weiß ich, wie ich das angehen will."
 - Erweitert von 3 auf 12 Features (inkl. Prosodic/Spectral)
 - Differenziert: Stress/Aufregung (Tonhöhe-Varianz), Aggression/Überzeugung (Spectral Flux)
 
-**Warum whisper.cpp (lokal) statt Cloud-STT?**
-- 100% Privacy, kostenlos, schnelle lokale Inferenz
-
 **Warum Ollama als Standard-LLM?**
 - Privacy-First, kostenlos, 2-Command Setup, Persistent RAM (kein Cold-Start)
 
 **Warum Qwen 2.5 als Modell?**
-- **Mehrsprachig trainiert:** Alibaba's Qwen2.5 wurde auf umfangreichen mehrsprachigen Daten trainiert (inkl. Deutsch)
+- **Mehrsprachig trainiert:** Inkl. Deutsch
 - **Balanced Size:** 7B Parameter bietet einen guten Kompromiss zwischen Qualität und Latenz
 - **JSON Compliance:** Zuverlässige strukturierte Outputs für unsere Prompt-Architektur
 - **Angepasstes Modelfile:** Reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
-- **Praktisch bewährt:** Funktioniert gut für unsere deutschen Analyse-Prompts
 
 **Warum Multi-Anbieter LLM?**
 - User-Choice: Privacy (Ollama) vs. Speed (OpenAI) vs. Quality (Anthropic), kein Vendor Lock-in
@@ -460,6 +500,10 @@ Jetzt weiß ich, wie ich das angehen will."
 **Warum RAG-Chatbot (78 Chunks)?**
 - Ohne RAG halluziniert das LLM – mit RAG: hohe Zuverlässigkeit
 - Kontextbasierte Antworten reduzieren Halluzinationen deutlich
+
+**Warum INT8-quantisiertes Embedding (118 MB statt 448 MB)?**
+- 74.9% Größenreduktion bei <2% Accuracy-Verlust (0.990 similarity)
+- Self-quantized für Bundle-Optimierung
 
 #### Security & Privacy
 
@@ -469,6 +513,16 @@ Jetzt weiß ich, wie ich das angehen will."
 
 **Warum DSGVO Art. 6 statt Art. 9?**
 - Art. 9 erfordert DPIA + MDR-Zertifizierung (~50.000 EUR) – unverhältnismäßig für Selbstreflexions-Tool
+
+**Warum KI-Accuracy-Disclaimer (EU AI Act Art. 52)?**
+- Transparenzpflicht: "KI-Ergebnisse können fehlerhaft sein"
+- 4-Stufen-Strategie: Tour, About-Section, Confidence-Tooltips, Krisenhotline
+
+#### UX-Entscheidungen
+
+**Warum 4 Error Boundaries statt globaler Fehlerbehandlung?**
+- Komponenten-Isolation: Chat-Crash ≠ App-Crash
+- "Fail Small, Recover Fast" – nur betroffene Komponente zeigt Fehler
 
 </details>
 
@@ -622,16 +676,8 @@ Hablará unterstützt drei LLM-Anbieter:
 ### Wie kann ich zwischen LLM-Anbietern wechseln?
 **Settings → LLM Anbieter** – Ollama/OpenAI/Anthropic mit einem Klick wählbar.
 
----
-
-### Fehlerbehebung
-
-**Ollama-Probleme:** `brew services restart ollama` oder Ollama.app neu starten.
-
-**Keine Analyse-Ergebnisse:** Kein LLM-Anbieter konfiguriert – Ollama starten oder Cloud-LLM in Einstellungen wählen.
-
 </details>
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.3 | **Stand:** 2026-02-02
+**Autor:** Marc Allgeier | **Version:** 1.0.3 | **Stand:** 03. Februar 2026
