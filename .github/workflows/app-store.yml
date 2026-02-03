@@ -299,15 +299,17 @@ jobs:
           # Embed provisioning profile
           cp $RUNNER_TEMP/embedded.provisionprofile "$APP_PATH/Contents/embedded.provisionprofile"
 
-          # Sign whisper binaries in Resources (required for App Sandbox)
-          echo "Signing whisper binaries..."
+          # Sign whisper binaries with CHILD entitlements (inherit sandbox, no provisioning profile needed)
+          # Using child-entitlements.plist instead of main entitlements to avoid ITMS-90885
+          CHILD_ENTITLEMENTS="src-tauri/child-entitlements.plist"
+          echo "Signing whisper binaries with child entitlements..."
           for binary in "$APP_PATH/Contents/Resources/binaries/whisper-"*; do
             if [ -f "$binary" ]; then
               echo "Signing: $binary"
               codesign --force --options runtime \
                 --sign "$CERT" \
                 --keychain $KEYCHAIN_PATH \
-                --entitlements "$ENTITLEMENTS" \
+                --entitlements "$CHILD_ENTITLEMENTS" \
                 "$binary"
             fi
           done
