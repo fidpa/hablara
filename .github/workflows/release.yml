@@ -8,7 +8,7 @@
 # Note: Uses macos-14 (ARM64) runner to cross-compile x86_64 (FREE on GitHub)
 # ============================================================================
 
-name: Release
+name: GitHub Release
 
 on:
   push:
