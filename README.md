@@ -19,7 +19,7 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 ## Installation
 
-**Voraussetzungen:** macOS 10.15+ (Apple Silicon)
+**Voraussetzungen:** macOS 10.15+
 
 **Hinweis:** Ohne LLM-Anbieter funktioniert nur die Transkription. Alle psychologischen Features (Emotion, Fehlschluss, GFK) benötigen Ollama, OpenAI oder Anthropic.
 
@@ -598,7 +598,7 @@ Hablará unterstützt drei LLM-Anbieter:
 **Ja**, mit OpenAI/Anthropic API-Key (Cloud-basiert).
 
 ### Funktioniert es auf Windows/Linux?
-**Noch nicht**. Aktuell nur macOS. Windows/Linux geplant.
+**Noch nicht**. Aktuell nur macOS (Apple Silicon & Intel). Windows/Linux geplant.
 
 ### Wie groß ist das Ollama-Model?
 **6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).

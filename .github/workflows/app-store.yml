@@ -271,7 +271,7 @@ jobs:
       - name: Build Tauri app
         run: pnpm tauri build --target universal-apple-darwin --bundles app
 
-      - name: Verify build and set display name
+      - name: Verify build and patch Info.plist
         run: |
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
           echo "✅ App: $APP_PATH"
@@ -281,6 +281,10 @@ jobs:
           # Set CFBundleDisplayName for accented display name in Finder/Dock
           plutil -replace CFBundleDisplayName -string "Hablará" "$APP_PATH/Contents/Info.plist"
           echo "✅ CFBundleDisplayName set to 'Hablará'"
+
+          # Set CFBundleVersion to match --bundle-version in altool upload
+          plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$APP_PATH/Contents/Info.plist"
+          echo "✅ CFBundleVersion set to '${{ github.run_number }}'"
 
       # ========================================
       # 6. Sign App Bundle
@@ -295,7 +299,20 @@ jobs:
           # Embed provisioning profile
           cp $RUNNER_TEMP/embedded.provisionprofile "$APP_PATH/Contents/embedded.provisionprofile"
 
-          # Sign all nested binaries first (deep signing)
+          # Sign whisper binaries in Resources (required for App Sandbox)
+          echo "Signing whisper binaries..."
+          for binary in "$APP_PATH/Contents/Resources/binaries/whisper-"*; do
+            if [ -f "$binary" ]; then
+              echo "Signing: $binary"
+              codesign --force --options runtime \
+                --sign "$CERT" \
+                --keychain $KEYCHAIN_PATH \
+                --entitlements "$ENTITLEMENTS" \
+                "$binary"
+            fi
+          done
+
+          # Sign all nested binaries in MacOS (deep signing)
           find "$APP_PATH/Contents/MacOS" -type f -perm +111 | while read binary; do
             echo "Signing binary: $binary"
             codesign --force --options runtime \
