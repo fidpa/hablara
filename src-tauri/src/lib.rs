@@ -11,6 +11,12 @@ pub mod storage;   // Public for security audit tests
 mod text;
 mod types;
 mod vad;
+/// Platform-specific modules providing cross-platform abstractions.
+///
+/// Currently supports:
+/// - macOS: MLX availability check, Metal acceleration utilities
+/// - Windows: Placeholder for Phase B (WASAPI, DirectML)
+mod platform;
 
 use tauri::Manager;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -29,7 +35,8 @@ pub fn run() {
 
     tracing::info!("Hablará Backend starting");
 
-    tauri::Builder::default()
+    // Build base plugins (cross-platform)
+    let base_builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -46,8 +53,16 @@ pub fn run() {
                 )
                 .build(),
         )
-        .plugin(tauri_plugin_macos_permissions::init())
-        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_http::init());
+
+    // Add macOS-specific plugin conditionally
+    #[cfg(target_os = "macos")]
+    let app_builder = base_builder.plugin(tauri_plugin_macos_permissions::init());
+
+    #[cfg(not(target_os = "macos"))]
+    let app_builder = base_builder;
+
+    app_builder
         .setup(|app| {
             // Initialize audio state (Web Audio API based - legacy)
             let audio_state = audio::AudioState::new();

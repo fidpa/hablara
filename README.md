@@ -7,6 +7,28 @@
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
+## Platform Support
+
+| Platform | Status | Architecture | Notes |
+|----------|--------|--------------|-------|
+| **macOS** | ✅ Production | ARM64 (Apple Silicon) | Primary target, MLX-Whisper available |
+| **macOS** | ✅ Production | x86_64 (Intel) | whisper.cpp only |
+| **Windows** | 🚧 Coming Soon | x86_64 | whisper.cpp CPU, no MLX |
+| **Linux** | 📋 Planned | x86_64 | Post-Windows |
+
+### Feature Availability by Platform
+
+| Feature | macOS ARM64 | macOS x64 | Windows |
+|---------|-------------|-----------|---------|
+| whisper.cpp | ✅ | ✅ | 🚧 |
+| MLX-Whisper | ✅ | ❌ | ❌ |
+| Ollama LLM | ✅ | ✅ | 🚧 |
+| OpenAI/Anthropic | ✅ | ✅ | 🚧 |
+| Global Hotkey | ✅ | ✅ | 🚧 |
+| Native Audio | ✅ | ✅ | 🚧 |
+
+---
+
 Desktop-App für Selbstreflexion mit Spracherkennung und KI-gestützter Emotionsanalyse.
 
 Transkription erfolgt lokal (whisper.cpp).
@@ -40,7 +62,7 @@ Skript ist verifizierbar (siehe unten)
 1. Installiert Ollama
 2. Lädt qwen2.5:7b Modell herunter (~4.7GB)
 3. Erstellt angepasstes Modell (reduziertes Kontextfenster, niedrige Temperature)
-4. Verifiziert Installation automatisch
+4. Verifiziert Installation
 
 <details>
 <summary>Skript prüfen</summary>

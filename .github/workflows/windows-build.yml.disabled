@@ -1,0 +1,147 @@
+# ============================================================================
+# Hablará - Windows Build Workflow (DISABLED - Phase B)
+# ============================================================================
+# This workflow is disabled until Windows support is complete.
+# Rename to windows-build.yml to enable.
+#
+# Prerequisites (Phase B):
+# 1. whisper-x86_64-pc-windows-msvc.exe binary in src-tauri/binaries/
+# 2. Windows-specific beforeDevCommand (run-dev.ps1 exists)
+# 3. Code signing setup (optional but recommended)
+#
+# See: docs-dev/entry-points/WINDOWS_PORTING.md (when created)
+# ============================================================================
+
+name: Windows Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Allow manual trigger for testing
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: "Hablara"
+
+jobs:
+  build-windows:
+    name: Build Windows x64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ========================================
+      # Build whisper.cpp for Windows
+      # ========================================
+      - name: Cache whisper model
+        id: cache-whisper-model
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper german-turbo model
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/models
+          Write-Host "Downloading german-turbo model (1.62 GB)..."
+          Invoke-WebRequest -Uri "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" -OutFile "src-tauri/models/ggml-german-turbo.bin"
+          Get-Item src-tauri/models/ggml-german-turbo.bin
+          Write-Host "Model downloaded"
+
+      - name: Build whisper.cpp for Windows
+        shell: pwsh
+        run: |
+          Write-Host "Cloning whisper.cpp..."
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git C:\whisper-build
+          Set-Location C:\whisper-build
+
+          Write-Host "Building for x86_64..."
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DWHISPER_BUILD_EXAMPLES=ON
+
+          cmake --build build --config Release
+
+          # Copy binary
+          $BINARY = "build/bin/Release/whisper-cli.exe"
+          if (-not (Test-Path $BINARY)) {
+            $BINARY = "build/bin/whisper-cli.exe"
+          }
+
+          if (-not (Test-Path $BINARY)) {
+            Write-Host "Binary not found"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/src-tauri/binaries"
+          Copy-Item $BINARY "$env:GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-pc-windows-msvc.exe"
+
+          Write-Host "whisper.cpp built for Windows"
+          Get-ChildItem "$env:GITHUB_WORKSPACE/src-tauri/binaries/"
+
+      - name: Update tauri.conf.json for Windows binary
+        shell: pwsh
+        run: |
+          $configPath = "src-tauri/tauri.conf.json"
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          $config.bundle.resources += "binaries/whisper-x86_64-pc-windows-msvc.exe"
+          $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
+          Write-Host "Updated tauri.conf.json for Windows binary"
+
+      # ========================================
+      # Build Tauri Windows App
+      # ========================================
+      - name: Build Tauri Windows app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Hablara ${{ github.ref_name }}'
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe

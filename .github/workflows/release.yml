@@ -6,6 +6,11 @@
 # Trigger: Push a tag matching 'v*' (e.g., v1.0.3)
 #
 # Note: Uses macos-14 (ARM64) runner to cross-compile x86_64 (FREE on GitHub)
+#
+# TODO: Windows support (Phase B)
+# - Windows x64 build will be added as a separate job
+# - Requires whisper-x86_64-pc-windows-msvc.exe binary
+# - See .github/workflows/windows-build.yml.disabled for template
 # ============================================================================
 
 name: GitHub Release
