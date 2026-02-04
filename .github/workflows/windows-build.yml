@@ -1,15 +1,17 @@
 # ============================================================================
-# Hablará - Windows Build Workflow (DISABLED - Phase B)
+# Hablará - Windows Build Workflow
 # ============================================================================
-# This workflow is disabled until Windows support is complete.
-# Rename to windows-build.yml to enable.
+# Builds Windows x64 installer (MSI/NSIS) for Hablará desktop app.
 #
-# Prerequisites (Phase B):
-# 1. whisper-x86_64-pc-windows-msvc.exe binary in src-tauri/binaries/
-# 2. Windows-specific beforeDevCommand (run-dev.ps1 exists)
-# 3. Code signing setup (optional but recommended)
+# Triggers:
+# - Tag push (v*) - creates release artifacts
+# - Manual dispatch - for testing
 #
-# See: docs-dev/entry-points/WINDOWS_PORTING.md (when created)
+# Prerequisites:
+# - whisper.cpp is built from source during CI
+# - german-turbo model is cached (1.62 GB)
+#
+# See: docs-dev/entry-points/WINDOWS_PORTING.md
 # ============================================================================
 
 name: Windows Build
@@ -30,6 +32,7 @@ jobs:
   build-windows:
     name: Build Windows x64
     runs-on: windows-latest
+    timeout-minutes: 45  # Whisper build + model download can take time
 
     steps:
       - name: Checkout code
@@ -114,15 +117,6 @@ jobs:
 
           Write-Host "whisper.cpp built for Windows"
           Get-ChildItem "$env:GITHUB_WORKSPACE/src-tauri/binaries/"
-
-      - name: Update tauri.conf.json for Windows binary
-        shell: pwsh
-        run: |
-          $configPath = "src-tauri/tauri.conf.json"
-          $config = Get-Content $configPath -Raw | ConvertFrom-Json
-          $config.bundle.resources += "binaries/whisper-x86_64-pc-windows-msvc.exe"
-          $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
-          Write-Host "Updated tauri.conf.json for Windows binary"
 
       # ========================================
       # Build Tauri Windows App

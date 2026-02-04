@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/fidpa/hablara/releases)
-[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://www.apple.com/macos)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
 ## Platform Support
@@ -13,19 +13,20 @@
 |----------|--------|--------------|-------|
 | **macOS** | ✅ Production | ARM64 (Apple Silicon) | Primary target, MLX-Whisper available |
 | **macOS** | ✅ Production | x86_64 (Intel) | whisper.cpp only |
-| **Windows** | 🚧 Coming Soon | x86_64 | whisper.cpp CPU, no MLX |
-| **Linux** | 📋 Planned | x86_64 | Post-Windows |
+| **Windows** | 🧪 Beta | x86_64 | whisper.cpp CPU, no MLX, WASAPI audio |
+| **Linux** | 📋 Planned | x86_64 | Post-Windows (Q2 2026) |
 
 ### Feature Availability by Platform
 
-| Feature | macOS ARM64 | macOS x64 | Windows |
-|---------|-------------|-----------|---------|
-| whisper.cpp | ✅ | ✅ | 🚧 |
-| MLX-Whisper | ✅ | ❌ | ❌ |
-| Ollama LLM | ✅ | ✅ | 🚧 |
-| OpenAI/Anthropic | ✅ | ✅ | 🚧 |
-| Global Hotkey | ✅ | ✅ | 🚧 |
-| Native Audio | ✅ | ✅ | 🚧 |
+| Feature | macOS ARM64 | macOS x64 | Windows x64 |
+|---------|-------------|-----------|-------------|
+| whisper.cpp | ✅ | ✅ | ✅ |
+| MLX-Whisper | ✅ | ❌ | ❌ (Apple Silicon only) |
+| Ollama LLM | ✅ | ✅ | ✅ |
+| OpenAI/Anthropic | ✅ | ✅ | ✅ |
+| Global Hotkey | ✅ | ✅ | ✅ (Ctrl+Shift+D) |
+| Native Audio | ✅ (CoreAudio) | ✅ (CoreAudio) | ✅ (WASAPI) |
+| API Key Storage | ✅ (Keychain) | ✅ (Keychain) | ✅ (Credential Manager) |
 
 ---
 
@@ -41,9 +42,11 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 ## Installation
 
-**Voraussetzungen:** macOS 10.15+
-
 **Hinweis:** Ohne LLM-Anbieter funktioniert nur die Transkription. Alle psychologischen Features (Emotion, Fehlschluss, GFK) benötigen Ollama, OpenAI oder Anthropic.
+
+### macOS Installation
+
+**Voraussetzungen:** macOS 10.15+
 
 **1. Hablará installieren**
 - **Download:** [GitHub Releases](https://github.com/fidpa/hablara/releases) (1.5 GB DMG)
@@ -55,6 +58,46 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
 ```
+
+### Windows Installation (Beta)
+
+**Voraussetzungen:** Windows 10/11 (x64), 10 GB freier Speicher
+
+**1. Hablará installieren**
+- **Download:** [GitHub Releases](https://github.com/fidpa/hablara/releases) (MSI Installer)
+- Installer ausführen → Installationsanweisungen folgen
+- Windows Defender SmartScreen: "Weitere Informationen" → "Trotzdem ausführen" (App ist nicht signiert)
+
+**2. Ollama installieren (PowerShell)**
+
+```powershell
+# PowerShell als Administrator öffnen
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Setup-Skript ausführen
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\setup-ollama-quick.ps1"
+& "$env:TEMP\setup-ollama-quick.ps1"
+```
+
+<details>
+<summary>Windows-spezifische Hinweise</summary>
+
+**Unterschiede zu macOS:**
+- **Kein MLX-Whisper:** MLX ist Apple Silicon exklusiv. Windows nutzt whisper.cpp (CPU)
+- **WASAPI Audio:** Native Windows-Audio statt CoreAudio
+- **Credential Manager:** API Keys werden im Windows Credential Manager gespeichert
+- **Hotkey:** Ctrl+Shift+D (identisch zu macOS)
+
+**Bekannte Einschränkungen:**
+- Transkription kann auf CPU etwas langsamer sein als auf Apple Silicon
+- Erste Installation erfordert SmartScreen-Ausnahme (unsigned binary)
+
+**Troubleshooting:**
+- **"Mikrofon nicht gefunden":** Windows Einstellungen → Datenschutz → Mikrofon → Hablara erlauben
+- **Ollama startet nicht:** Als Administrator ausführen oder manuell `ollama serve` starten
+- **PowerShell-Fehler:** Execution Policy prüfen: `Get-ExecutionPolicy` sollte `RemoteSigned` sein
+
+</details>
 
 Skript ist verifizierbar (siehe unten)
 
@@ -288,7 +331,7 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 
 | Maßnahme | Implementierung |
 |----------|-----------------|
-| **API Key Verschlüsselung** | OS-native Keychain (macOS: AES-256-GCM) |
+| **API Key Verschlüsselung** | OS-native Keychain (macOS: AES-256-GCM, Windows: DPAPI) |
 | **Keine Cloud-Pflicht** | whisper.cpp + Ollama vollständig offline |
 | **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
 | **Open-Source** | Transparenz durch offenen Code |
@@ -321,7 +364,7 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 - **Input Validation** – Alle User-Eingaben via Zod Schema validiert
 - **XSS Protection** – LLM-Output wird vor Rendering sanitized
 - **Safety Filter** – Blockiert problematische LLM-Outputs
-- **App Sandbox** – macOS Hardened Runtime begrenzt Systemzugriff auf das Notwendige
+- **App Sandbox** – macOS Hardened Runtime / Windows Security Features begrenzen Systemzugriff
 
 ### Abgrenzung zu Gesundheits-Apps
 
@@ -675,7 +718,8 @@ Hablará unterstützt drei LLM-Anbieter:
 **Ja**, mit OpenAI/Anthropic API-Key (Cloud-basiert).
 
 ### Funktioniert es auf Windows/Linux?
-**Noch nicht**. Aktuell nur macOS (Apple Silicon & Intel). Windows/Linux geplant.
+**Windows:** Ja, Beta-Version verfügbar (x64, whisper.cpp CPU). Download im [GitHub Releases](https://github.com/fidpa/hablara/releases).
+**Linux:** Noch nicht. Geplant für Q2 2026.
 
 ### Wie groß ist das Ollama-Model?
 **6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).

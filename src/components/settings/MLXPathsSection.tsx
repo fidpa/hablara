@@ -5,12 +5,15 @@
  *
  * Konfiguration für Custom Python Path + Models Directory (~/mlx-whisper/models/).
  * File Picker Dialog (Tauri), Reset zu Defaults. Nur relevant für MLX-Whisper Provider.
+ *
+ * NOTE: This component is only shown on macOS (MLX is Apple Silicon only).
  */
 
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { AppSettings } from "@/lib/types";
 import { DEFAULT_MLX_PATHS } from "@/lib/types";
+import { isMacOS } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -25,6 +28,9 @@ export function MLXPathsSection({
   onSettingsChange,
 }: MLXPathsSectionProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Hide entire section on non-macOS (MLX is Apple Silicon only)
+  if (!isMacOS()) return null;
 
   return (
     <div className="space-y-2">

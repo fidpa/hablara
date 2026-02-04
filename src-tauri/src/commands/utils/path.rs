@@ -10,19 +10,26 @@
 use std::path::PathBuf;
 use tauri::Manager;
 
-/// Expand ~ to home directory
+/// Expand ~ to home directory (cross-platform)
+///
+/// Uses dirs::home_dir() for Windows/macOS/Linux compatibility
+/// instead of $HOME environment variable (Unix-only).
 pub fn expand_tilde(path: &str) -> PathBuf {
     if path.starts_with("~/") {
-        let home = std::env::var("HOME").unwrap_or_default();
-        PathBuf::from(home).join(&path[2..])
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(&path[2..])
     } else if path == "~" {
-        PathBuf::from(std::env::var("HOME").unwrap_or_default())
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
     } else {
         PathBuf::from(path)
     }
 }
 
 /// Resolve MLX Python path with priority: env var > user setting > default
+///
+/// Note: MLX is macOS-only (Apple Silicon). On other platforms, this function
+/// still works but will return a non-existent fallback path.
 pub fn resolve_mlx_python_path(user_path: Option<&str>) -> PathBuf {
     // 1. Check environment variable
     if let Ok(env_path) = std::env::var("MLX_WHISPER_PYTHON") {
@@ -40,13 +47,21 @@ pub fn resolve_mlx_python_path(user_path: Option<&str>) -> PathBuf {
         }
     }
 
-    // 3. Default path (vllm-mlx venv with mlx_audio)
-    let default = expand_tilde("~/Repos/cli/mac/venvs/vllm-mlx/bin/python");
-    if default.exists() {
-        return default;
+    // 3. Default paths (macOS only - MLX requires Apple Silicon)
+    #[cfg(target_os = "macos")]
+    {
+        let default = expand_tilde("~/Repos/cli/mac/venvs/vllm-mlx/bin/python");
+        if default.exists() {
+            return default;
+        }
+
+        let fallback = expand_tilde("~/.venvs/mlx-whisper/bin/python");
+        if fallback.exists() {
+            return fallback;
+        }
     }
 
-    // 4. Fallback for other installations
+    // 4. Fallback: return a path that likely won't exist (MLX not available on this platform)
     expand_tilde("~/.venvs/mlx-whisper/bin/python")
 }
 

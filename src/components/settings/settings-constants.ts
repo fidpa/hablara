@@ -4,16 +4,44 @@
  * Shared constants for Whisper, LLM, and other configuration options
  */
 
+import { isMacOS } from "@/lib/utils";
+
 // NOTE: Only german-turbo is bundled with Hablará. Other models would require manual installation.
 // Showing only available models to avoid user confusion.
 export const WHISPER_MODELS = [
   { value: "german-turbo", label: "German Turbo (~1.6GB)", description: "Optimiert für Deutsch" },
 ] as const;
 
-export const WHISPER_PROVIDERS = [
+// All available Whisper providers
+const WHISPER_PROVIDERS_ALL = [
   { value: "whisper-cpp", label: "Whisper.cpp", description: "Stabil, kompiliert" },
   { value: "mlx-whisper", label: "MLX-Whisper", description: "Apple Silicon optimiert" },
 ] as const;
+
+export type WhisperProviderOption = (typeof WHISPER_PROVIDERS_ALL)[number];
+
+/**
+ * Get available Whisper providers for the current platform.
+ * Filters out MLX-Whisper on non-macOS platforms (Apple Silicon only).
+ *
+ * Use this function with useMemo in components for lazy evaluation:
+ * ```tsx
+ * const providers = useMemo(() => getWhisperProviders(), []);
+ * ```
+ *
+ * @returns Array of available Whisper provider options
+ */
+export function getWhisperProviders(): WhisperProviderOption[] {
+  return WHISPER_PROVIDERS_ALL.filter(
+    (p) => p.value !== "mlx-whisper" || isMacOS()
+  );
+}
+
+/**
+ * @deprecated Use getWhisperProviders() with useMemo for better testability and SSR safety.
+ * This constant is evaluated at import-time which can cause issues with mocking and SSR.
+ */
+export const WHISPER_PROVIDERS = getWhisperProviders();
 
 // DEPRECATED: Models are now discovered dynamically via useAvailableWhisperModels hook
 export const MLX_WHISPER_MODELS = [

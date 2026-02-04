@@ -4,9 +4,12 @@
   "version": "1.0.3",
   "identifier": "com.fidpa.hablara",
   "build": {
-    "beforeDevCommand": "./scripts-dev/next-dev-wait.sh",
+    "beforeDevCommand": {
+      "script": "./scripts-dev/next-dev-wait.sh",
+      "windows": "powershell -ExecutionPolicy Bypass -File .\\scripts-dev\\win\\next-dev-wait.ps1"
+    },
     "devUrl": "http://localhost:3000",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "pnpm run build",
     "frontendDist": "../out"
   },
   "app": {
@@ -45,7 +48,7 @@
     ],
     "resources": [
       "resources/models/silero_vad_v4.onnx",
-      "binaries/whisper-aarch64-apple-darwin",
+      "binaries/whisper-*",
       "models/ggml-german-turbo.bin",
       "../public/models",
       "../scripts/ollama/qwen2.5-7b-custom.modelfile"

@@ -27,9 +27,13 @@ export { AnalyseTab, KIModelleTab, SpeicherTab, ErweitertTab } from "./tabs";
 // Constants (named exports for better tree-shaking)
 export {
   WHISPER_MODELS,
-  WHISPER_PROVIDERS,
+  WHISPER_PROVIDERS, // @deprecated - use getWhisperProviders()
+  getWhisperProviders,
   MLX_WHISPER_MODELS,
   LLM_PROVIDERS,
   LLM_MODELS,
   OLLAMA_MODELS,
 } from "./settings-constants";
+
+// Types
+export type { WhisperProviderOption } from "./settings-constants";

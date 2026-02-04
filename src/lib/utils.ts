@@ -150,6 +150,29 @@ export function isTauri(): boolean {
 }
 
 /**
+ * Check if running on macOS (for platform-specific features like MLX)
+ * Uses navigator.userAgentData (modern) with navigator.platform fallback (deprecated but reliable in Tauri)
+ * @returns true if running on macOS, false otherwise
+ */
+export function isMacOS(): boolean {
+  if (typeof window === "undefined") return false;
+
+  // Modern API (Chrome 90+, Edge 90+) - preferred
+  // Note: Safari doesn't support userAgentData, but that's fine since Safari is macOS-only
+  // TypeScript doesn't include userAgentData in lib.dom.d.ts yet, so we use type assertion
+  const nav = navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  if (nav.userAgentData?.platform) {
+    return nav.userAgentData.platform.toLowerCase() === "macos";
+  }
+
+  // Fallback: navigator.platform (deprecated but reliable in Tauri WebView)
+  const platform = navigator.platform?.toLowerCase() || "";
+  return platform.includes("mac");
+}
+
+/**
  * Formatiert Processing-Duration für Badge-Anzeige
  * @param ms Duration in Millisekunden
  * @returns Formatierter String (z.B. "4.2s" oder "850ms")

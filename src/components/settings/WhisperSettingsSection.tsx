@@ -7,6 +7,7 @@
  * Dynamic Model Discovery via useAvailableWhisperModels Hook bei MLX-Provider.
  */
 
+import { useMemo } from "react";
 import type { AppSettings, WhisperProvider } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useAvailableWhisperModels } from "@/hooks/useAvailableWhisperModels";
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-import { WHISPER_PROVIDERS, WHISPER_MODELS } from "./settings-constants";
+import { getWhisperProviders, WHISPER_MODELS } from "./settings-constants";
 
 interface WhisperSettingsSectionProps {
   settings: AppSettings;
@@ -31,6 +32,9 @@ export function WhisperSettingsSection({
   settings,
   onSettingsChange,
 }: WhisperSettingsSectionProps) {
+  // Lazy evaluation of platform-specific providers (better for testing/SSR)
+  const whisperProviders = useMemo(() => getWhisperProviders(), []);
+
   const { models: mlxModels, isLoading: isLoadingModels, error: discoveryError } = useAvailableWhisperModels(
     settings.mlxPaths,
     settings.whisperProvider === "mlx-whisper"
@@ -42,7 +46,7 @@ export function WhisperSettingsSection({
       <div className="space-y-2">
         <Label>Whisper Provider</Label>
         <div className="grid grid-cols-2 gap-2">
-          {WHISPER_PROVIDERS.map((provider) => {
+          {whisperProviders.map((provider) => {
             const isActive = settings.whisperProvider === provider.value;
             return (
               <button
