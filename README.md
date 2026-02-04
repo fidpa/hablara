@@ -456,8 +456,9 @@ Jetzt weiß ich, wie ich das angehen will."
 #### Architektur
 
 **Warum Tauri 2.0 statt Electron?**
-- Kleineres Base-Framework, schnellerer Startup (~200ms vs. ~800ms)
-- Native Rust ohne FFI-Overhead, integrierte Security-Sandbox
+- Native Rust-Integration für lokale ML-Modelle (whisper.cpp, ONNX) ohne FFI-Overhead
+- Geringerer RAM-Verbrauch – wichtig bei parallelem Ollama + Whisper + Embedding
+- Schnellerer Startup (~200ms vs. ~800ms), integrierte Security-Sandbox
 
 **Warum Native Audio (cpal) statt Web Audio API?**
 - Browser ignoriert 16kHz Request (liefert 48kHz). VAD: 0% vs. >90% mit cpal
@@ -495,7 +496,7 @@ Jetzt weiß ich, wie ich das angehen will."
 - **Angepasstes Modelfile:** Reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
 
 **Warum Multi-Anbieter LLM?**
-- User-Choice: Privacy (Ollama) vs. Speed (OpenAI) vs. Quality (Anthropic), kein Vendor Lock-in
+- Wahlfreiheit: Privacy (Ollama) vs. Geschwindigkeit (OpenAI) vs. Qualität (Anthropic), kein Vendor Lock-in
 
 **Warum RAG-Chatbot (78 Chunks)?**
 - Ohne RAG halluziniert das LLM – mit RAG: hohe Zuverlässigkeit

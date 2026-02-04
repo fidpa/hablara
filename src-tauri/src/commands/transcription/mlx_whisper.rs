@@ -71,7 +71,7 @@ pub(crate) async fn transcribe_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts-dev/mlx-transcribe.py"))
+        .map(|p| p.join("scripts-dev/mac/mlx-transcribe.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {
@@ -184,7 +184,7 @@ pub(crate) async fn check_mlx_whisper_status_impl(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts-dev/mlx-transcribe.py"))
+        .map(|p| p.join("scripts-dev/mac/mlx-transcribe.py"))
         .unwrap_or_default();
 
     // Check Python venv

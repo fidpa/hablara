@@ -11,7 +11,6 @@
     "dev:clean": "./scripts-dev/run-dev.sh --clean",
     "dev:ultra": "./scripts-dev/run-dev.sh --ultra",
     "build": "next build",
-    "build:agent": "./scripts/build-agent.sh",
     "build:knowledge-db": "tsx scripts-dev/build-knowledge-db.ts",
     "download:model": "tsx scripts-dev/download-embedding-model.ts",
     "build:embeddings": "tsx scripts-dev/generate-embeddings.ts",

@@ -135,14 +135,14 @@ Das Icon visualisiert nicht "ein Mikrofon" (zu simpel) oder "ein Gehirn" (zu kli
 **Quick Steps:**
 1. DALL-E 3 generiert 1024x1024px PNG
 2. Manual Refinement (optional)
-3. `scripts-dev/generate-icon-sizes.sh` generiert alle Groessen + ICNS
+3. `scripts-dev/mac/generate-icon-sizes.sh` generiert alle Groessen + ICNS
 4. Tauri Integration (`tauri.conf.json`)
 
 **Script-Verwendung:**
 ```bash
-./scripts-dev/generate-icon-sizes.sh          # Interaktiv
-./scripts-dev/generate-icon-sizes.sh --yes    # Auto .icns
-./scripts-dev/generate-icon-sizes.sh --help   # Hilfe anzeigen
+./scripts-dev/mac/generate-icon-sizes.sh          # Interaktiv
+./scripts-dev/mac/generate-icon-sizes.sh --yes    # Auto .icns
+./scripts-dev/mac/generate-icon-sizes.sh --help   # Hilfe anzeigen
 ```
 
 </details>
@@ -160,7 +160,7 @@ Das Icon visualisiert nicht "ein Mikrofon" (zu simpel) oder "ein Gehirn" (zu kli
 - **[docs/reference/guidelines/CONFIG.md](../docs/reference/guidelines/CONFIG.md)** - Tauri Config (Icon-Integration)
 
 ### Related Files
-- **[scripts-dev/generate-icon-sizes.sh](../scripts-dev/generate-icon-sizes.sh)** - Icon-Conversion Script (1024px → alle Groessen + ICNS)
+- **[scripts-dev/mac/generate-icon-sizes.sh](../scripts-dev/mac/generate-icon-sizes.sh)** - Icon-Conversion Script (1024px → alle Groessen + ICNS, macOS only)
 - `src-tauri/tauri.conf.json` - Icon-Pfad Configuration
 
 ---

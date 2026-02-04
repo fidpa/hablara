@@ -57,7 +57,7 @@ async fn analyze_emotion_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts-dev/mlx-analyze.py"))
+        .map(|p| p.join("scripts-dev/mac/mlx-analyze.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {
@@ -160,7 +160,7 @@ async fn analyze_fallacy_mlx(
 
     let script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(|p| p.join("scripts-dev/mlx-analyze.py"))
+        .map(|p| p.join("scripts-dev/mac/mlx-analyze.py"))
         .unwrap_or_default();
 
     if !python_path.exists() {

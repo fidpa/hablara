@@ -1,8 +1,8 @@
 ---
 diataxis-type: reference
 status: production
-version: 1.0.0
-last_updated: 2026-02-01
+version: 1.1.0
+last_updated: 2026-02-04
 ---
 
 # Scripts Directory
@@ -11,9 +11,16 @@ last_updated: 2026-02-01
 
 This directory contains **user-facing scripts** for setup and installation:
 
+### Bash Scripts (macOS/Linux)
 - `setup-whisper.sh` - Installs whisper.cpp with Metal acceleration
 - `setup-ollama-quick.sh` - One-liner installer for Ollama + qwen2.5:7b-custom
 - `bump-version.sh` - Version bump tool for releases
+
+### PowerShell Scripts (Windows)
+- `setup-whisper.ps1` - Installs whisper.cpp with MSVC (optional CUDA)
+- `setup-ollama-quick.ps1` - Installer for Ollama + qwen2.5:7b-custom
+
+### Shared Resources
 - `ollama/` - Ollama model configurations
 
 ## Development Scripts
@@ -23,7 +30,7 @@ This directory contains **user-facing scripts** for setup and installation:
 See `scripts-dev/README.md` for:
 - Development Tools (run-dev.sh, next-dev-wait.sh, etc.)
 - RAG & Embeddings (build-knowledge-db.ts, generate-embeddings.ts, etc.)
-- MLX Scripts (mlx-transcribe.py, mlx-analyze.py, mlx-serve-dev.py)
+- MLX Scripts (scripts-dev/mac/mlx-transcribe.py, mlx-analyze.py, mlx-serve-dev.py)
 - Benchmarks & Testing
 - Audio & Sound utilities
 - Validation scripts
@@ -32,37 +39,38 @@ See `scripts-dev/README.md` for:
 
 ## TL;DR (20 words)
 
-3 Public Setup-Scripts für Hablará Installation (Whisper, Ollama, Versioning) - Development-Scripts in scripts-dev/ (gitignored).
+Public Setup-Scripts fuer Hablara Installation (Whisper, Ollama) - Cross-Platform (Bash + PowerShell) - Development-Scripts in scripts-dev/.
 
 ---
 
 ## Essential Context
 
 > **DIATAXIS Category**: Reference (Information-Oriented)
-> **Audience**: End-Users installing Hablará + Release Engineers
+> **Audience**: End-Users installing Hablara + Release Engineers
 
-**Zweck**: User-facing installation scripts für LLM (Ollama) und STT (Whisper), plus Versionierungs-Tool.
+**Zweck**: User-facing installation scripts fuer LLM (Ollama) und STT (Whisper), plus Versionierungs-Tool.
 
-**Scope**: 3 Public Scripts (setup-whisper.sh, setup-ollama-quick.sh, bump-version.sh) + ollama/ directory.
+**Scope**: 5 Public Scripts (3 Bash, 2 PowerShell) + ollama/ directory.
 
 **Key Points**:
-- setup-whisper.sh installiert whisper.cpp mit Metal-Acceleration (optional)
-- setup-ollama-quick.sh installiert Ollama + qwen2.5:7b-custom (One-liner)
-- bump-version.sh synchronisiert Version über package.json, Cargo.toml, tauri.conf.json
-- Development scripts in scripts-dev/ (nicht für End-User)
+- setup-whisper.sh/ps1 installiert whisper.cpp (macOS: Metal, Windows: MSVC/CUDA)
+- setup-ollama-quick.sh/ps1 installiert Ollama + qwen2.5:7b-custom
+- bump-version.sh synchronisiert Version ueber package.json, Cargo.toml, tauri.conf.json
+- Development scripts in scripts-dev/ (nicht fuer End-User)
 
 **Quick Access**:
-- [Setup & Installation](#setup--installation)
+- [Setup & Installation (macOS/Linux)](#setup--installation-macoslinux)
+- [Setup & Installation (Windows)](#setup--installation-windows)
 - [Version Management](#version-management)
 - [Ollama Configuration](#ollama-configuration)
 
 ---
 
-## Setup & Installation
+## Setup & Installation (macOS/Linux)
 
 ### setup-whisper.sh
 
-Installiert whisper.cpp mit Metal-Acceleration für macOS.
+Installiert whisper.cpp mit Metal-Acceleration fuer macOS.
 
 **Verwendung:**
 ```bash
@@ -70,28 +78,28 @@ Installiert whisper.cpp mit Metal-Acceleration für macOS.
 ./scripts/setup-whisper.sh
 
 # Mit spezifischem Model
-./scripts/setup-whisper.sh small    # 466 MB, bessere Qualität
+./scripts/setup-whisper.sh small    # 466 MB, bessere Qualitaet
 ./scripts/setup-whisper.sh tiny     # 75 MB, schnellste Option
-./scripts/setup-whisper.sh medium   # 1.5 GB, hohe Qualität
+./scripts/setup-whisper.sh medium   # 1.5 GB, hohe Qualitaet
 ```
 
 **Was das Script macht:**
 1. Installiert cmake falls nicht vorhanden (via Homebrew)
 2. Klont whisper.cpp nach `.whisper-build/`
 3. Kompiliert mit cmake + Metal-Acceleration (M1/M2/M3/M4)
-4. Lädt das gewählte Model herunter
+4. Laedt das gewaehlte Model herunter
 5. Kopiert Binary und Model nach `src-tauri/binaries/` und `src-tauri/models/`
 
 **Voraussetzungen:**
 - macOS mit Xcode Command Line Tools
-- Homebrew (für cmake)
+- Homebrew (fuer cmake)
 - Git, Curl
 
 ---
 
 ### setup-ollama-quick.sh
 
-**One-Liner Installer** für Ollama + optimiertes qwen2.5:7b-custom Model.
+**One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model.
 
 **Verwendung:**
 ```bash
@@ -103,21 +111,81 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 ```
 
 **Was das Script macht:**
-1. Prüft Disk-Space (10 GB minimum)
+1. Prueft Disk-Space (10 GB minimum)
 2. Installiert Ollama (via offizielles Install-Script)
 3. Startet Ollama Server
-4. Lädt qwen2.5:7b Model (~4.7 GB)
+4. Laedt qwen2.5:7b Model (~4.7 GB)
 5. Erstellt qwen2.5:7b-custom mit optimierten Parametern
 6. Verifiziert Installation
 
 **Features:**
 - Temperature: 0.3 (konsistenter Output)
 - Top-P: 0.9 (Fokus auf wahrscheinlichste Tokens)
-- System Prompt: JSON-Mode für strukturierte Outputs
+- System Prompt: JSON-Mode fuer strukturierte Outputs
 - Automatische Error-Recovery
-- Exit-Codes für CI/CD Integration
+- Exit-Codes fuer CI/CD Integration
 
-**Dauer:** ~5-10 Min (abhängig von Download-Speed)
+**Dauer:** ~5-10 Min (abhaengig von Download-Speed)
+
+---
+
+## Setup & Installation (Windows)
+
+### setup-whisper.ps1
+
+Installiert whisper.cpp mit MSVC fuer Windows (optional CUDA).
+
+**Verwendung:**
+```powershell
+# Standard-Installation mit "base" Model (142 MB)
+.\scripts\setup-whisper.ps1
+
+# Mit spezifischem Model
+.\scripts\setup-whisper.ps1 -Model small
+
+# Mit CUDA-Acceleration (NVIDIA GPU erforderlich)
+.\scripts\setup-whisper.ps1 -Model base -UseCuda
+```
+
+**Was das Script macht:**
+1. Prueft Visual Studio Build Tools, CMake, Git
+2. Klont whisper.cpp nach `.whisper-build\`
+3. Kompiliert mit CMake/MSVC (optional CUDA)
+4. Laedt das gewaehlte Model herunter
+5. Kopiert Binary und Model nach `src-tauri\binaries\` und `src-tauri\models\`
+
+**Voraussetzungen:**
+- Windows 10/11
+- Visual Studio Build Tools ("Desktop development with C++")
+- CMake: `winget install Kitware.CMake`
+- Git: `winget install Git.Git`
+- Optional: CUDA Toolkit fuer GPU-Beschleunigung
+
+---
+
+### setup-ollama-quick.ps1
+
+Installer fuer Ollama + optimiertes qwen2.5:7b-custom Model.
+
+**Verwendung:**
+```powershell
+.\scripts\setup-ollama-quick.ps1
+```
+
+**Was das Script macht:**
+1. Prueft Disk-Space (10 GB minimum)
+2. Installiert Ollama (via winget oder manuelle Anleitung)
+3. Startet Ollama Server
+4. Laedt qwen2.5:7b Model (~4.7 GB)
+5. Erstellt qwen2.5:7b-custom mit optimierten Parametern
+6. Verifiziert Installation
+
+**Voraussetzungen:**
+- Windows 10/11
+- 10 GB freier Speicher
+- Internet-Verbindung
+
+**Dauer:** ~5-10 Min (abhaengig von Download-Speed)
 
 ---
 
@@ -125,7 +193,7 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 ### bump-version.sh
 
-Synchronisiert Versionsnummern über package.json, Cargo.toml, tauri.conf.json.
+Synchronisiert Versionsnummern ueber package.json, Cargo.toml, tauri.conf.json.
 
 **Verwendung:**
 ```bash
@@ -147,9 +215,9 @@ Synchronisiert Versionsnummern über package.json, Cargo.toml, tauri.conf.json.
 
 ### Modelfiles
 
-Ollama Modelfile-Konfigurationen für optimierte LLM-Performance.
+Ollama Modelfile-Konfigurationen fuer optimierte LLM-Performance.
 
-**Verfügbare Modelfiles:**
+**Verfuegbare Modelfiles:**
 - `qwen2.5-7b-custom.modelfile` - Default (4.7 GB)
 - `qwen2.5-14b-custom.modelfile` - Enhanced (8.9 GB)
 - `qwen2.5-32b-custom.modelfile` - Premium (19 GB)
@@ -169,32 +237,30 @@ ollama create qwen2.5:14b-custom -f scripts/ollama/qwen2.5-14b-custom.modelfile
 - System Prompt: JSON-Mode
 - Context Window: 32k tokens
 
-**Automatisch via:** `setup-ollama-quick.sh`
+**Automatisch via:** `setup-ollama-quick.sh` oder `setup-ollama-quick.ps1`
 
 ---
 
 ## Icon-Conversion Scripts
 
-**Location:** `icons/`
+**Location:** `scripts-dev/mac/` (macOS-spezifisch)
 
-### generate-sizes.sh
+### generate-icon-sizes.sh
 
-Generiert alle Icon-Größen aus 1024x1024px PNG.
+Generiert alle Icon-Groessen aus 1024x1024px PNG.
 
 **Verwendung:**
 ```bash
-cd icons/
-./generate-sizes.sh hablara-icon-1024.png
+./scripts-dev/mac/generate-icon-sizes.sh hablara-icon-1024.png
 ```
 
 **Output:**
-- 10 PNG-Größen (16px - 1024px)
+- 10 PNG-Groessen (16px - 1024px)
 - icon.icns (macOS Bundle)
-- icon.ico (Windows, future)
 
 **Requirements:**
 - ImageMagick (via Homebrew)
-- libpng (optional, bessere Kompression)
+- macOS
 
 **Siehe:** [docs/how-to/icon/CREATE_MACOS_APP_ICON.md](../docs/how-to/icon/CREATE_MACOS_APP_ICON.md)
 
@@ -202,20 +268,58 @@ cd icons/
 
 ## Quick-Start
 
+### macOS/Linux
 ```bash
 # 1. Ollama + LLM installieren (One-liner)
 ./scripts/setup-ollama-quick.sh
 
-# 2. Whisper installieren (optional - für lokale Transkription)
+# 2. Whisper installieren (optional - fuer lokale Transkription)
 ./scripts/setup-whisper.sh
 
 # 3. App starten
 pnpm run dev
 ```
 
-**Gesamtdauer:** ~5-15 Min (abhängig von Downloads)
+### Windows
+```powershell
+# 1. Ollama + LLM installieren
+.\scripts\setup-ollama-quick.ps1
 
-**Development-Scripts:** Siehe `scripts-dev/README.md` für dev.sh, RAG-Tools, MLX, Benchmarks, etc.
+# 2. Whisper installieren (optional)
+.\scripts\setup-whisper.ps1
+
+# 3. App starten
+pnpm run dev
+```
+
+**Gesamtdauer:** ~5-15 Min (abhaengig von Downloads)
+
+**Development-Scripts:** Siehe `scripts-dev/README.md` fuer dev.sh, RAG-Tools, MLX, Benchmarks, etc.
+
+---
+
+## Troubleshooting
+
+### PowerShell Execution Policy (Windows)
+
+```powershell
+# Fehler: "running scripts is disabled on this system"
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### Visual Studio Build Tools (Windows)
+
+Falls CMake-Build fehlschlaegt:
+1. Visual Studio Build Tools installieren: https://visualstudio.microsoft.com/downloads/
+2. "Desktop development with C++" Workload waehlen
+3. Script erneut ausfuehren
+
+### Homebrew nicht gefunden (macOS)
+
+```bash
+# Homebrew installieren
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
 
 ---
 
@@ -231,14 +335,16 @@ pnpm run dev
 
 ### Development
 - **[scripts-dev/README.md](../scripts-dev/README.md)** - Development-Scripts (gitignored)
+- **[scripts-dev/mac/README.md](../scripts-dev/mac/README.md)** - macOS-spezifische Scripts
+- **[scripts-dev/win/README.md](../scripts-dev/win/README.md)** - Windows-spezifische Scripts
 
 ### Project Documentation
 - **[CLAUDE.md](../CLAUDE.md)** - Projekt-Einstiegspunkt
-- **[.claude/context.md](../.claude/context.md)** - Tech-Stack Übersicht
+- **[.claude/context.md](../.claude/context.md)** - Tech-Stack Uebersicht
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Created**: 28. Januar 2026
-**Last Updated**: 1. Februar 2026
+**Last Updated**: 4. Februar 2026
 **Status**: Production
