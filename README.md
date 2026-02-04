@@ -21,7 +21,7 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 - [Installation](#installation)
 - [Funktionen](#funktionen)
 - [Architektur](#architektur)
-- [Datenschutzkonzept](#datenschutzkonzept)
+- [Datenschutz](#datenschutz)
 - [Vergleich](#vergleich)
 - [Mitwirken](#mitwirken)
 - [Lizenz](#lizenz)
@@ -44,7 +44,7 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 | Feature | macOS ARM64 | macOS x64 | Windows x64 |
 |---------|-------------|-----------|-------------|
 | whisper.cpp | ✅ | ✅ | ✅ |
-| MLX-Whisper | ✅ | ❌ | ❌ (nur Apple Silicon) |
+| MLX-Whisper | ✅ | ❌ | ❌ |
 | Ollama LLM | ✅ | ✅ | ✅ |
 | OpenAI/Anthropic | ✅ | ✅ | ✅ |
 | Global Hotkey | ✅ | ✅ | ✅ (Ctrl+Shift+D) |
@@ -608,7 +608,7 @@ Shift+D) Stille                   Fehlschluss
 
 ---
 
-## Datenschutzkonzept
+## Datenschutz
 
 **100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Datenkontrolle.
 

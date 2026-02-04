@@ -26,7 +26,7 @@ Hablará ist eine Desktop-Anwendung für macOS und Windows, die Sprachaufnahmen 
 |--------|---------|
 | **Was** | Mikrofonaufnahmen während der Nutzung |
 | **Wo verarbeitet** | Lokal auf deinem Computer |
-| **Wo gespeichert** | macOS: `~/Hablara/recordings/` · Windows: `%APPDATA%\Hablara\recordings\` |
+| **Wo gespeichert** | macOS: `~/Hablara/recordings/` · Windows: `%USERPROFILE%\Hablara\recordings\` |
 | **Wie lange** | Bis du sie manuell löschst |
 | **An Dritte gesendet** | ❌ Nein (niemals) |
 
@@ -79,7 +79,7 @@ Du hast folgende Rechte:
 
 | Recht | Wie ausüben |
 |-------|-------------|
-| **Auskunft** | Alle Daten liegen lokal (macOS: `~/Hablara/` · Windows: `%APPDATA%\Hablara\`) |
+| **Auskunft** | Alle Daten liegen lokal (macOS: `~/Hablara/` · Windows: `%USERPROFILE%\Hablara\`) |
 | **Löschung** | Einstellungen → Speicher → "Alle Aufnahmen löschen" |
 | **Widerspruch** | Cloud-LLM in Einstellungen deaktivieren |
 | **Datenportabilität** | Aufnahmen als WAV + JSON exportierbar |
@@ -133,7 +133,7 @@ Hablará is a desktop application for macOS and Windows that transcribes voice r
 |--------|---------|
 | **What** | Microphone recordings during use |
 | **Where processed** | Locally on your computer |
-| **Where stored** | macOS: `~/Hablara/recordings/` · Windows: `%APPDATA%\Hablara\recordings\` |
+| **Where stored** | macOS: `~/Hablara/recordings/` · Windows: `%USERPROFILE%\Hablara\recordings\` |
 | **How long** | Until you manually delete them |
 | **Sent to third parties** | ❌ No (never) |
 
@@ -186,7 +186,7 @@ You have the following rights:
 
 | Right | How to exercise |
 |-------|-----------------|
-| **Access** | All data is stored locally (macOS: `~/Hablara/` · Windows: `%APPDATA%\Hablara\`) |
+| **Access** | All data is stored locally (macOS: `~/Hablara/` · Windows: `%USERPROFILE%\Hablara\`) |
 | **Deletion** | Settings → Storage → "Delete all recordings" |
 | **Objection** | Disable Cloud LLM in settings |
 | **Portability** | Recordings exportable as WAV + JSON |
