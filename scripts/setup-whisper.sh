@@ -81,10 +81,19 @@ log_error() {
 # Cleanup function for error handling
 cleanup() {
     local exit_code=$?
+
     if [[ $exit_code -ne 0 ]]; then
         log_error "Build failed - cleaning up partial artifacts"
-        [[ -d "$BUILD_DIR/build" ]] && rm -rf "$BUILD_DIR/build"
+
+        # Safe cleanup with lock to prevent race conditions
+        local lock_file="$BUILD_DIR/.cleanup.lock"
+        if mkdir "$lock_file" 2>/dev/null; then
+            # Remove build artifacts
+            rm -rf "$BUILD_DIR/build" 2>/dev/null || true
+            rmdir "$lock_file" 2>/dev/null
+        fi
     fi
+
     exit $exit_code
 }
 trap cleanup EXIT INT TERM
@@ -148,10 +157,26 @@ log_step "Setting up whisper.cpp..."
 if [[ -d "$BUILD_DIR" ]]; then
     log_info "Build directory exists, updating..."
     cd "$BUILD_DIR"
-    git pull --quiet
+
+    # Verify remote URL before pull (prevent supply chain attack)
+    EXPECTED_REMOTE="https://github.com/ggml-org/whisper.cpp.git"
+    CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+
+    if [[ "$CURRENT_REMOTE" != "$EXPECTED_REMOTE" ]]; then
+        log_error "Unexpected git remote detected"
+        log_error "  Expected: $EXPECTED_REMOTE"
+        log_error "  Found:    $CURRENT_REMOTE"
+        log_info "Repository may be compromised - aborting"
+        exit 1
+    fi
+
+    # Pull with SSL verification enabled
+    git -c http.sslVerify=true pull --quiet
+
 else
     log_info "Cloning whisper.cpp..."
-    git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$BUILD_DIR"
+    # Clone with SSL verification
+    git -c http.sslVerify=true clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$BUILD_DIR"
     cd "$BUILD_DIR"
 fi
 
@@ -200,6 +225,16 @@ log_step "Downloading Whisper model: $MODEL..."
 bash ./models/download-ggml-model.sh "$MODEL"
 
 MODEL_FILE="models/ggml-${MODEL}.bin"
+
+# Validate model path (prevent path traversal)
+CANONICAL_MODEL_PATH=$(realpath -m "$MODEL_FILE" 2>/dev/null || echo "$MODEL_FILE")
+CANONICAL_MODELS_DIR=$(realpath -m "$BUILD_DIR/models" 2>/dev/null || echo "$BUILD_DIR/models")
+
+if [[ "$CANONICAL_MODEL_PATH" != "$CANONICAL_MODELS_DIR"* ]]; then
+    log_error "Path traversal detected in model file: $MODEL_FILE"
+    exit 1
+fi
+
 if [[ ! -f "$MODEL_FILE" ]]; then
     log_error "Model download failed"
     exit 1
