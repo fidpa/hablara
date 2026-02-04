@@ -451,7 +451,7 @@ ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile
 
 **LLM-Anbieter Alternativen:**
 - **MLX-LLM** (Optional, Power-User): 3x schneller, manuelles Setup erforderlich
-- **OpenAI/Anthropic API**: API Key in Settings konfigurieren
+- **OpenAI/Anthropic API**: API Key in Einstellungen konfigurieren
 
 ### 5. Development starten
 
@@ -517,7 +517,7 @@ Hablará unterstützt drei LLM-Anbieter:
 **Export-Button** in der Chat-Ansicht (neben RAG-Chatbot). Alle Metadaten (Emotion, Fallacies, Audio Features) werden inkludiert, wenn aktiviert.
 
 ### Wie kann ich zwischen LLM-Anbietern wechseln?
-**Settings → LLM Anbieter** – Ollama/OpenAI/Anthropic mit einem Klick wählbar.
+**Einstellungen → KI-Modelle** – Ollama/OpenAI/Anthropic mit einem Klick wählbar.
 
 </details>
 
@@ -583,7 +583,7 @@ Shift+D) Stille                   Fehlschluss
 │        └───────────────┬──────────────────┘                     │
 │                        ▼                                        │
 │   ┌──────────────────────────────────────────────────────────┐  │
-│   │ LLMs (Multi-Provider, frei wählbar via Settings)         │  │
+│   │ LLMs (Multi-Provider, frei wählbar via Einstellungen)    │  │
 │   │ • Ollama (lokal, 2-4s, gratis, Datenschutz)              │  │
 │   │ • OpenAI (Cloud, 0.5-2s, günstig, Geschwindigkeit)       │  │
 │   │ • Anthropic (Cloud, 0.5-2s, teurer, Qualität)            │  │

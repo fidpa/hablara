@@ -222,3 +222,7 @@ Typen: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`
 ---
 
 Vielen Dank für Ihren Beitrag zu Hablará!
+
+---
+
+**Version:** 1.0.0

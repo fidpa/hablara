@@ -82,3 +82,7 @@ Dies ist ein Challenge-Projekt mit begrenzten Ressourcen:
 ---
 
 Vielen Dank, dass Sie Hablará nutzen!
+
+---
+
+**Version:** 1.0.0

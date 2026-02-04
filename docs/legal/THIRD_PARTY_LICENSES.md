@@ -126,3 +126,7 @@ The majority of Hablará's codebase is original work, including:
 - Psychological Enrichments (GFK, Cognitive Distortions, Four-Sides Model)
 - Feature-Toggle System
 - Multi-Provider LLM Integration (Ollama, OpenAI, Anthropic)
+
+---
+
+**Version:** 1.0.0

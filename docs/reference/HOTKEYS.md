@@ -114,3 +114,7 @@ Für globale Hotkeys benötigt Hablará Zugriff:
 
 - [FAQ](../guides/FAQ.md) - Häufige Probleme lösen
 - [Aufnahme-Qualität optimieren](../guides/RECORDING_QUALITY.md) - LED-Meter, Speech Ratio
+
+---
+
+**Version:** 1.0.0

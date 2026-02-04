@@ -209,3 +209,7 @@ tccutil reset Microphone
 - [Aufnahme-Qualität optimieren](./RECORDING_QUALITY.md) - LED-Meter, Speech Ratio
 - [Aufnahmen verwalten](./STORAGE.md) - Storage, Export
 - [Hotkeys konfigurieren](../reference/HOTKEYS.md) - Tastenkürzel anpassen
+
+---
+
+**Version:** 1.0.0

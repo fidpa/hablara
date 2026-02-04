@@ -4,7 +4,8 @@
 
 | Version | Unterstützt        |
 | ------- | ------------------ |
-| 0.0.x   | :white_check_mark: |
+| 1.0.x   | :white_check_mark: |
+| < 1.0   | :x:                |
 
 ## Sicherheitslücken melden
 
@@ -97,3 +98,7 @@ Diese Sicherheitsrichtlinie umfasst:
 ---
 
 Vielen Dank, dass Sie helfen, Hablará sicher zu halten!
+
+---
+
+**Version:** 1.0.0

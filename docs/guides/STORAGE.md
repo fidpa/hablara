@@ -129,3 +129,7 @@ mkdir -p ~/Hablara/recordings/
 
 - [FAQ](./FAQ.md) - Häufige Probleme lösen
 - [Aufnahme-Qualität optimieren](./RECORDING_QUALITY.md) - LED-Meter, Speech Ratio
+
+---
+
+**Version:** 1.0.0

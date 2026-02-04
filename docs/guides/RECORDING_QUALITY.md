@@ -78,3 +78,7 @@ Die Speech Ratio zeigt, wie viel der Aufnahme als Sprache erkannt wurde:
 
 - [FAQ](./FAQ.md) - Häufige Probleme lösen
 - [Hotkeys konfigurieren](../reference/HOTKEYS.md) - Tastenkürzel anpassen
+
+---
+
+**Version:** 1.0.0

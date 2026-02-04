@@ -57,3 +57,7 @@ Version 2.1, verfügbar unter
 
 [homepage]: https://www.contributor-covenant.org
 [v2.1]: https://www.contributor-covenant.org/version/2/1/code_of_conduct.html
+
+---
+
+**Version:** 2.1.0 (Contributor Covenant)
