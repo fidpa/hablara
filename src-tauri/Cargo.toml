@@ -31,7 +31,6 @@ anyhow = "1"
 thiserror = "1"
 base64 = "0.22"
 hound = "3.5"  # WAV file handling
-vad-rs = { git = "https://github.com/cjpais/vad-rs", default-features = false }
 rubato = "0.16"  # Audio resampling (from handy repo)
 cpal = "0.15"    # Native audio capture (from handy repo)
 regex = "1"  # Text filtering for hallucination removal
@@ -44,6 +43,16 @@ dirs = "5.0"  # Home directory detection for security validation
 tauri-plugin-fs = "^2.0"
 tauri-plugin-opener = "2.0.0"
 tauri-plugin-http = "2"  # HTTP client for Anthropic API (bypasses CORS)
+
+# VAD with load-dynamic feature to avoid MSVC linking issues on Windows
+[target.'cfg(target_os = "windows")'.dependencies.vad-rs]
+git = "https://github.com/cjpais/vad-rs"
+default-features = false
+features = ["load-dynamic"]
+
+[target.'cfg(not(target_os = "windows"))'.dependencies.vad-rs]
+git = "https://github.com/cjpais/vad-rs"
+default-features = false
 
 [dev-dependencies]
 futures = "0.3"  # For join_all in integration tests

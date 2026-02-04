@@ -1,45 +1,15 @@
 ---
 diataxis-type: reference
 status: production
-version: 1.1.0
+version: 1.2.0
 last_updated: 2026-02-04
 ---
 
 # Scripts Directory
 
-## Public Scripts (End-Users)
-
-This directory contains **user-facing scripts** for setup and installation:
-
-### Bash Scripts (macOS/Linux)
-- `setup-whisper.sh` - Installs whisper.cpp with Metal acceleration
-- `setup-ollama-quick.sh` - One-liner installer for Ollama + qwen2.5:7b-custom
-- `bump-version.sh` - Version bump tool for releases
-
-### PowerShell Scripts (Windows)
-- `setup-whisper.ps1` - Installs whisper.cpp with MSVC (optional CUDA)
-- `setup-ollama-quick.ps1` - Installer for Ollama + qwen2.5:7b-custom
-
-### Shared Resources
-- `ollama/` - Ollama model configurations
-
-## Development Scripts
-
-**Development-only scripts have been moved to `scripts-dev/` (gitignored).**
-
-See `scripts-dev/README.md` for:
-- Development Tools (run-dev.sh, next-dev-wait.sh, etc.)
-- RAG & Embeddings (build-knowledge-db.ts, generate-embeddings.ts, etc.)
-- MLX Scripts (scripts-dev/mac/mlx-transcribe.py, mlx-analyze.py, mlx-serve-dev.py)
-- Benchmarks & Testing
-- Audio & Sound utilities
-- Validation scripts
-
----
-
 ## TL;DR (20 words)
 
-Public Setup-Scripts fuer Hablara Installation (Whisper, Ollama) - Cross-Platform (Bash + PowerShell) - Development-Scripts in scripts-dev/.
+Public Setup-Scripts fuer Hablara Installation (Whisper, Ollama) - Cross-Platform (Bash + PowerShell).
 
 ---
 
@@ -56,15 +26,49 @@ Public Setup-Scripts fuer Hablara Installation (Whisper, Ollama) - Cross-Platfor
 - setup-whisper.sh/ps1 installiert whisper.cpp (macOS: Metal, Windows: MSVC/CUDA)
 - setup-ollama-quick.sh/ps1 installiert Ollama + qwen2.5:7b-custom
 - bump-version.sh synchronisiert Version ueber package.json, Cargo.toml, tauri.conf.json
-- Development scripts in scripts-dev/ (nicht fuer End-User)
+- Development-only scripts sind nicht im Public Repository enthalten
 
 **Quick Access**:
-- [Setup & Installation (macOS/Linux)](#setup--installation-macoslinux)
-- [Setup & Installation (Windows)](#setup--installation-windows)
-- [Version Management](#version-management)
+- [Quick-Start](#quick-start)
+- [Setup macOS/Linux](#setup--installation-macoslinux)
+- [Setup Windows](#setup--installation-windows)
 - [Ollama Configuration](#ollama-configuration)
+- [Troubleshooting](#troubleshooting)
 
 ---
+
+## Quick-Start
+
+### macOS/Linux
+```bash
+# 1. Ollama + LLM installieren (One-liner)
+./scripts/setup-ollama-quick.sh
+
+# 2. Whisper installieren (optional - fuer lokale Transkription)
+./scripts/setup-whisper.sh
+
+# 3. App starten
+pnpm run dev
+```
+
+### Windows
+```powershell
+# 1. Ollama + LLM installieren
+.\scripts\setup-ollama-quick.ps1
+
+# 2. Whisper installieren (optional)
+.\scripts\setup-whisper.ps1
+
+# 3. App starten
+pnpm run dev
+```
+
+**Gesamtdauer:** ~5-15 Min (abhaengig von Downloads)
+
+---
+
+<details id="setup--installation-macoslinux">
+<summary><b>Setup & Installation (macOS/Linux)</b> - Whisper + Ollama Scripts</summary>
 
 ## Setup & Installation (macOS/Linux)
 
@@ -127,7 +131,12 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Dauer:** ~5-10 Min (abhaengig von Download-Speed)
 
+</details>
+
 ---
+
+<details id="setup--installation-windows">
+<summary><b>Setup & Installation (Windows)</b> - Whisper + Ollama Scripts</summary>
 
 ## Setup & Installation (Windows)
 
@@ -187,7 +196,12 @@ Installer fuer Ollama + optimiertes qwen2.5:7b-custom Model.
 
 **Dauer:** ~5-10 Min (abhaengig von Download-Speed)
 
+</details>
+
 ---
+
+<details id="version-management">
+<summary><b>Version Management</b> - bump-version.sh</summary>
 
 ## Version Management
 
@@ -207,7 +221,12 @@ Synchronisiert Versionsnummern ueber package.json, Cargo.toml, tauri.conf.json.
 - Validiert SemVer-Format
 - Erstellt Git-Commit (optional)
 
+</details>
+
 ---
+
+<details id="ollama-configuration">
+<summary><b>Ollama Configuration</b> - Modelfiles</summary>
 
 ## Ollama Configuration
 
@@ -239,64 +258,12 @@ ollama create qwen2.5:14b-custom -f scripts/ollama/qwen2.5-14b-custom.modelfile
 
 **Automatisch via:** `setup-ollama-quick.sh` oder `setup-ollama-quick.ps1`
 
----
-
-## Icon-Conversion Scripts
-
-**Location:** `scripts-dev/mac/` (macOS-spezifisch)
-
-### generate-icon-sizes.sh
-
-Generiert alle Icon-Groessen aus 1024x1024px PNG.
-
-**Verwendung:**
-```bash
-./scripts-dev/mac/generate-icon-sizes.sh hablara-icon-1024.png
-```
-
-**Output:**
-- 10 PNG-Groessen (16px - 1024px)
-- icon.icns (macOS Bundle)
-
-**Requirements:**
-- ImageMagick (via Homebrew)
-- macOS
-
-**Siehe:** [docs/how-to/icon/CREATE_MACOS_APP_ICON.md](../docs/how-to/icon/CREATE_MACOS_APP_ICON.md)
+</details>
 
 ---
 
-## Quick-Start
-
-### macOS/Linux
-```bash
-# 1. Ollama + LLM installieren (One-liner)
-./scripts/setup-ollama-quick.sh
-
-# 2. Whisper installieren (optional - fuer lokale Transkription)
-./scripts/setup-whisper.sh
-
-# 3. App starten
-pnpm run dev
-```
-
-### Windows
-```powershell
-# 1. Ollama + LLM installieren
-.\scripts\setup-ollama-quick.ps1
-
-# 2. Whisper installieren (optional)
-.\scripts\setup-whisper.ps1
-
-# 3. App starten
-pnpm run dev
-```
-
-**Gesamtdauer:** ~5-15 Min (abhaengig von Downloads)
-
-**Development-Scripts:** Siehe `scripts-dev/README.md` fuer dev.sh, RAG-Tools, MLX, Benchmarks, etc.
-
----
+<details id="troubleshooting">
+<summary><b>Troubleshooting</b> - Haeufige Probleme</summary>
 
 ## Troubleshooting
 
@@ -321,6 +288,8 @@ Falls CMake-Build fehlschlaegt:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
+</details>
+
 ---
 
 ## Cross-References
@@ -333,18 +302,13 @@ Falls CMake-Build fehlschlaegt:
 - **[scripts/ollama/README.md](ollama/README.md)** - Modelfile-Konfiguration
 - **[scripts/ollama/qwen2.5-7b-custom.modelfile](ollama/qwen2.5-7b-custom.modelfile)** - Default LLM Model
 
-### Development
-- **[scripts-dev/README.md](../scripts-dev/README.md)** - Development-Scripts (gitignored)
-- **[scripts-dev/mac/README.md](../scripts-dev/mac/README.md)** - macOS-spezifische Scripts
-- **[scripts-dev/win/README.md](../scripts-dev/win/README.md)** - Windows-spezifische Scripts
-
 ### Project Documentation
 - **[CLAUDE.md](../CLAUDE.md)** - Projekt-Einstiegspunkt
 - **[.claude/context.md](../.claude/context.md)** - Tech-Stack Uebersicht
 
 ---
 
-**Version**: 1.1.0
+**Version**: 1.2.0
 **Created**: 28. Januar 2026
 **Last Updated**: 4. Februar 2026
 **Status**: Production

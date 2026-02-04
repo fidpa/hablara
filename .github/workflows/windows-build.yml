@@ -10,8 +10,6 @@
 # Prerequisites:
 # - whisper.cpp is built from source during CI
 # - german-turbo model is cached (1.62 GB)
-#
-# See: docs-dev/entry-points/WINDOWS_PORTING.md
 # ============================================================================
 
 name: Windows Build

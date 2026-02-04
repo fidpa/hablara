@@ -258,7 +258,7 @@ export function DeleteDataSection({
             <AlertDialogTitle>API-Schlüssel entfernen?</AlertDialogTitle>
             <AlertDialogDescription>
               Diese Aktion entfernt alle gespeicherten API-Schlüssel (OpenAI, Anthropic) aus dem
-              macOS Schlüsselbund. Sie müssen die Schlüssel erneut eingeben, um Cloud-Dienste zu nutzen.
+              System-Schlüsselbund. Sie müssen die Schlüssel erneut eingeben, um Cloud-Dienste zu nutzen.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -3,7 +3,7 @@
 # ============================================================================
 # Builds a signed Universal Binary and uploads to App Store Connect.
 #
-# Prerequisites (GitHub Secrets) - run scripts-dev/mac/export-github-secrets.sh:
+# Prerequisites (GitHub Secrets):
 #   - APPLE_CERTIFICATES_BASE64: Base64-encoded .p12 (contains both certs)
 #   - APPLE_CERTIFICATES_PASSWORD: Password for .p12
 #   - PROVISIONING_PROFILE_BASE64: Base64-encoded .provisionprofile

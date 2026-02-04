@@ -49,11 +49,12 @@ trap {
 }
 
 # Configuration
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.1.0'
 $RequiredDiskSpaceGB = 10
 $ModelName = 'qwen2.5:7b'
 $CustomModelName = 'qwen2.5:7b-custom'
 $OllamaApiUrl = 'http://localhost:11434'
+$MinOllamaVersion = '0.3.0'  # qwen2.5 support added in 0.3.0
 
 # Logging functions
 function Write-LogInfo {
@@ -80,6 +81,92 @@ function Write-LogError {
 function Test-CommandExists {
     param([string]$Command)
     $null -ne (Get-Command $Command -ErrorAction SilentlyContinue)
+}
+
+# Compare semantic versions (returns: -1 if v1<v2, 0 if equal, 1 if v1>v2)
+function Compare-SemanticVersion {
+    param([string]$Version1, [string]$Version2)
+
+    # Extract numeric parts only, filter empty strings
+    $v1Parts = ($Version1 -replace '[^0-9.]', '') -split '\.' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ }
+    $v2Parts = ($Version2 -replace '[^0-9.]', '') -split '\.' | Where-Object { $_ -ne '' } | ForEach-Object { [int]$_ }
+
+    for ($i = 0; $i -lt [Math]::Max($v1Parts.Length, $v2Parts.Length); $i++) {
+        $p1 = if ($i -lt $v1Parts.Length) { $v1Parts[$i] } else { 0 }
+        $p2 = if ($i -lt $v2Parts.Length) { $v2Parts[$i] } else { 0 }
+
+        if ($p1 -lt $p2) { return -1 }
+        if ($p1 -gt $p2) { return 1 }
+    }
+    return 0
+}
+
+# Check for GPU availability
+function Test-GpuAvailable {
+    # Check for NVIDIA GPU
+    if (Test-CommandExists 'nvidia-smi') {
+        try {
+            $null = & nvidia-smi 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                return @{ Available = $true; Type = 'NVIDIA' }
+            }
+        } catch {}
+    }
+
+    # Check for AMD GPU (ROCm)
+    if (Test-Path 'C:\Program Files\AMD\ROCm\*\bin\rocm-smi.exe') {
+        return @{ Available = $true; Type = 'AMD ROCm' }
+    }
+
+    return @{ Available = $false; Type = 'CPU' }
+}
+
+# Check Ollama version
+function Test-OllamaVersion {
+    try {
+        $versionOutput = & ollama --version 2>&1 | Select-Object -First 1
+        # Extract version number (e.g., "ollama version is 0.15.2" -> "0.15.2")
+        if ($versionOutput -match '(\d+\.\d+\.?\d*)') {
+            $currentVersion = $Matches[1]
+
+            if ((Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
+                Write-LogWarning "Ollama version $currentVersion is older than recommended $MinOllamaVersion"
+                Write-LogInfo "Consider updating: winget upgrade Ollama.Ollama"
+                return $false
+            }
+            return $true
+        }
+    } catch {}
+    return $true  # Assume OK if version check fails
+}
+
+# Test model inference
+function Test-ModelInference {
+    param([string]$Model)
+
+    Write-LogInfo "Testing model inference..."
+
+    try {
+        $body = @{
+            model = $Model
+            prompt = "Say OK"
+            stream = $false
+            options = @{
+                num_predict = 5
+            }
+        } | ConvertTo-Json
+
+        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
+
+        if ($response.response) {
+            Write-LogSuccess "Model inference test passed"
+            return $true
+        }
+    } catch {
+        Write-LogWarning "Model inference test failed: $_"
+    }
+
+    return $false
 }
 
 # Get available disk space in GB
@@ -114,22 +201,75 @@ function Wait-OllamaServer {
     return $false
 }
 
+# Check if port is in use
+function Test-PortInUse {
+    param([int]$Port = 11434)
+
+    try {
+        $connection = New-Object System.Net.Sockets.TcpClient
+        try {
+            $connection.Connect('127.0.0.1', $Port)
+            return $true
+        } finally {
+            $connection.Close()
+            $connection.Dispose()
+        }
+    } catch {
+        return $false
+    }
+}
+
 # Start Ollama server
 function Start-OllamaServer {
-    # Check if already running
+    # Check if already running via API (with longer timeout)
     try {
-        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 2 -ErrorAction Stop
-        Write-LogInfo "Ollama server already running"
+        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
+        Write-LogSuccess "Ollama server already running (v$($response.version))"
         return $true
     } catch {
-        # Not running, try to start
+        # API not responding, check if port is in use
     }
 
-    # Try starting as background process
+    # Check if something is already using the port
+    if (Test-PortInUse -Port 11434) {
+        Write-LogInfo "Port 11434 is in use, checking if Ollama is responding..."
+
+        # Give it more time - maybe server is still starting
+        for ($i = 1; $i -le 10; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+                $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 3 -ErrorAction Stop
+                Write-LogSuccess "Ollama server is running (v$($response.version))"
+                return $true
+            } catch {
+                # Keep waiting
+            }
+        }
+
+        # Port is in use but not responding as Ollama
+        Write-LogWarning "Port 11434 is in use but not responding as Ollama API"
+        Write-LogInfo "Another process may be using this port"
+        Write-LogInfo "Check with: netstat -ano | findstr :11434"
+        return $false
+    }
+
+    # Port is free, try starting as background process
     if (Test-CommandExists 'ollama') {
         Write-LogInfo "Starting Ollama server..."
-        Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden
-        return Wait-OllamaServer
+        $process = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden -PassThru
+
+        # Wait for server to be ready
+        $serverReady = Wait-OllamaServer
+
+        # Verify process is still running after wait
+        if ($serverReady -and -not $process.HasExited) {
+            return $true
+        } elseif ($process.HasExited) {
+            Write-LogError "Ollama process exited unexpectedly (Exit code: $($process.ExitCode))"
+            return $false
+        }
+
+        return $serverReady
     }
 
     return $false
@@ -140,14 +280,17 @@ function Install-Ollama {
     if (Test-CommandExists 'ollama') {
         Write-LogSuccess "Ollama already installed"
 
-        # Show version
+        # Show version and check minimum
         $version = & ollama --version 2>&1 | Select-Object -First 1
         Write-LogInfo "Version: $version"
+        Test-OllamaVersion | Out-Null
 
         # Ensure server is running
         if (-not (Start-OllamaServer)) {
-            Write-LogError "Failed to start Ollama server"
-            Write-LogInfo "Please start manually: ollama serve"
+            Write-LogError "Could not connect to Ollama server"
+            Write-LogInfo "If Ollama is installed as a Windows service, it may need to be restarted"
+            Write-LogInfo "Try: Restart-Service Ollama -ErrorAction SilentlyContinue"
+            Write-LogInfo "Or start manually: ollama serve"
             exit 1
         }
 
@@ -172,6 +315,28 @@ function Install-Ollama {
 
                 # Refresh PATH
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+
+                # Verify ollama is now in PATH
+                if (-not (Test-CommandExists 'ollama')) {
+                    # Try common installation paths
+                    $commonPaths = @(
+                        "$env:LOCALAPPDATA\Programs\Ollama",
+                        "$env:ProgramFiles\Ollama",
+                        "${env:ProgramFiles(x86)}\Ollama"
+                    )
+                    foreach ($path in $commonPaths) {
+                        if (Test-Path (Join-Path $path 'ollama.exe')) {
+                            $env:Path += ";$path"
+                            break
+                        }
+                    }
+
+                    # Final check after manual PATH addition
+                    if (-not (Test-CommandExists 'ollama')) {
+                        Write-LogWarning "Ollama installed but not found in PATH"
+                        Write-LogInfo "Please restart your terminal or add Ollama to PATH manually"
+                    }
+                }
 
                 # Start server
                 Start-OllamaServer
@@ -237,9 +402,9 @@ function New-CustomModel {
 
     Write-LogInfo "Creating optimized custom model..."
 
-    # Create temporary Modelfile
+    # Create temporary Modelfile (using $ModelName for consistency)
     $modelfileContent = @"
-FROM qwen2.5:7b
+FROM $ModelName
 
 # Optimized parameters for Hablara emotion/fallacy detection
 PARAMETER temperature 0.3
@@ -250,8 +415,11 @@ PARAMETER repeat_penalty 1.1
 SYSTEM You are an expert in psychology, communication analysis, and logical reasoning. Analyze text for emotions, cognitive biases, and logical fallacies with high accuracy.
 "@
 
-    $modelfilePath = Join-Path $env:TEMP 'hablara-modelfile'
-    $modelfileContent | Out-File -FilePath $modelfilePath -Encoding UTF8
+    # Use unique temp filename to avoid conflicts
+    $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$(Get-Random).tmp"
+
+    # Write without BOM (UTF8NoBOM) - Ollama can't parse BOM
+    [System.IO.File]::WriteAllText($modelfilePath, $modelfileContent, [System.Text.UTF8Encoding]::new($false))
 
     try {
         & ollama create $CustomModelName -f $modelfilePath
@@ -263,9 +431,14 @@ SYSTEM You are an expert in psychology, communication analysis, and logical reas
 
         Write-LogSuccess "Custom model created: $CustomModelName"
         Write-LogInfo "Accuracy boost: 80% -> 93% (Emotion Detection)"
+    } catch {
+        Write-LogWarning "Unexpected error during model creation: $_"
+        throw
     } finally {
-        # Cleanup temp file
-        Remove-Item -Path $modelfilePath -ErrorAction SilentlyContinue
+        # Cleanup temp file (always executes, even on Ctrl+C)
+        if (Test-Path $modelfilePath) {
+            Remove-Item -Path $modelfilePath -Force -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -307,6 +480,13 @@ function Test-Installation {
         Write-LogWarning "Custom model not available (using base model)"
     }
 
+    # Test inference to verify model works
+    $testModel = if ($models -match "^$escapedCustomModelName\s") { $CustomModelName } else { $ModelName }
+    if (-not (Test-ModelInference -Model $testModel)) {
+        Write-LogWarning "Model loaded but inference test failed"
+        Write-LogInfo "The model may still work - try it in the app"
+    }
+
     Write-Host ""
     Write-LogSuccess "Setup complete!"
 
@@ -346,6 +526,15 @@ function Test-Prerequisites {
         Write-LogError "No network connection to ollama.ai"
         Write-LogInfo "Please check your internet connection"
         exit 3
+    }
+
+    # Check GPU availability
+    $gpu = Test-GpuAvailable
+    if ($gpu.Available) {
+        Write-LogSuccess "GPU detected: $($gpu.Type) (fast inference)"
+    } else {
+        Write-LogWarning "No GPU detected - using CPU (slower inference)"
+        Write-LogInfo "First inference may take 30-60 seconds"
     }
 
     Write-Host ""

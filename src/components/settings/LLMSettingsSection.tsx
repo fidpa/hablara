@@ -10,7 +10,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Check, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import type { AppSettings, LLMProvider, CloudProviderConsent, LLMProviderStatus } from "@/lib/types";
-import { cn, isTauri } from "@/lib/utils";
+import { cn, isTauri, isWindows } from "@/lib/utils";
 import { useTauri } from "@/hooks/useTauri";
 import { getApiKey } from "@/lib/secure-storage";
 import { logger } from "@/lib/logger";
@@ -302,8 +302,10 @@ export function LLMSettingsSection({
             
             <p className="text-slate-500 dark:text-slate-400">2. Terminal öffnen und Befehl ausführen:</p>
             <div className="bg-black p-2 rounded font-mono text-slate-600 dark:text-slate-300 select-all overflow-x-auto whitespace-nowrap">
-              {settings.llm.model.includes("custom") 
-                ? "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash" 
+              {settings.llm.model.includes("custom")
+                ? (isWindows()
+                    ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
+                    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash")
                 : `ollama pull ${settings.llm.model}`}
             </div>
             {settings.llm.model.includes("custom") && (

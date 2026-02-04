@@ -1,19 +1,53 @@
-# Audio Sounds - DEPRECATED (Web Audio API Used)
+---
+diataxis-type: reference
+status: production
+version: 1.0.0
+last_updated: 2026-02-04
+---
 
-⚠️ **This directory is NO LONGER USED for production sounds.**
+# Audio Sounds - Web Audio API Implementation
+
+## TL;DR (20 words)
+
+Recording-Feedback-Sounds werden via Web Audio API synthetisiert (880Hz Start, 440Hz Stop) - keine externen Dateien noetig.
+
+---
+
+## Essential Context
+
+> **DIATAXIS Category**: Reference (Information-Oriented)
+> **Audience**: Entwickler, die Audio-Feedback verstehen oder anpassen wollen
+
+**Zweck**: Dokumentiert die Web Audio API Implementierung fuer Recording Start/Stop Sounds.
+
+**Scope**: Sound-Spezifikationen, Implementation, Testing.
+
+**Key Points**:
+- Zero file dependencies (kein MP3 noetig)
+- ~1KB Code vs ~50KB MP3 files
+- ADSR Envelope fuer professionelle Qualitaet
+
+**Quick Access**:
+- [Sound Specifications](#sound-specifications)
+- [Implementation](#implementation)
+- [Testing](#testing)
+
+---
 
 ## Current Implementation
 
-Hablará uses **Web Audio API synthesis** for recording feedback sounds (start/stop beeps).
+Hablará verwendet **Web Audio API Synthese** fuer Recording-Feedback-Sounds.
 
 **Benefits:**
-- ✅ Zero file dependencies (no MP3s needed)
-- ✅ Professional quality with ADSR envelope
-- ✅ ~1KB code vs ~50KB MP3 files
-- ✅ Consistent cross-platform
-- ✅ Runtime-generated, customizable
+- Zero file dependencies (keine MP3s noetig)
+- Professionelle Qualitaet mit ADSR Envelope
+- ~1KB Code vs ~50KB MP3 Dateien
+- Konsistent cross-platform
+- Runtime-generiert, anpassbar
 
 **Implementation:** `src/lib/audio-feedback.ts`
+
+---
 
 ## Sound Specifications
 
@@ -31,12 +65,16 @@ Hablará uses **Web Audio API synthesis** for recording feedback sounds (start/s
 - Envelope: 5ms attack, 40ms release
 - Type: Sine wave
 
+---
+
 ## Testing
 
 ```bash
 # Run audio feedback tests
 pnpm test src/__tests__/lib/audio-feedback.test.ts
 ```
+
+---
 
 ## Migration Notes
 
@@ -52,16 +90,19 @@ pnpm test src/__tests__/lib/audio-feedback.test.ts
 - No licensing issues (own code)
 - Better customization (parameters in code)
 
-## Development Scripts (Legacy)
+---
 
-**These scripts are ONLY for development/testing, NOT for production:**
+## Cross-References
 
-```bash
-# Generate basic test sounds (requires ffmpeg)
-../scripts-dev/generate-sounds.sh
+### Implementation
+- **[src/lib/audio-feedback.ts](../../src/lib/audio-feedback.ts)** - Web Audio API Implementation
 
-# Download professional sounds (manual process)
-../scripts-dev/download-professional-sounds.sh
-```
+### Project Documentation
+- **[../../CLAUDE.md](../../CLAUDE.md)** - Projekt-Einstiegspunkt
 
-**For production DMG builds, the Web Audio API implementation is used automatically.**
+---
+
+**Version**: 1.0.0
+**Created**: 28. Januar 2026
+**Last Updated**: 4. Februar 2026
+**Status**: Production

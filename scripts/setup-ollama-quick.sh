@@ -20,12 +20,13 @@ IFS=$'\n\t'        # Safer word splitting
 # Configuration
 # ============================================================================
 
-readonly SCRIPT_VERSION="1.0.0"
+readonly SCRIPT_VERSION="1.1.0"
 readonly REQUIRED_DISK_SPACE_GB=10
 readonly MODEL_NAME="qwen2.5:7b"
 readonly CUSTOM_MODEL_NAME="qwen2.5:7b-custom"
 readonly OLLAMA_API_URL="http://localhost:11434"
 readonly OLLAMA_INSTALL_URL="https://ollama.ai/install.sh"
+readonly MIN_OLLAMA_VERSION="0.3.0"  # qwen2.5 support added in 0.3.0
 
 # Colors for output (with fallback for non-TTY)
 if [[ -t 1 ]]; then
@@ -68,6 +69,18 @@ command_exists() {
   command -v "$1" &> /dev/null
 }
 
+# Escape string for safe JSON embedding (handles \, ", and control chars)
+json_escape_string() {
+  local str="$1"
+  # Order matters: escape backslashes first, then other characters
+  str="${str//\\/\\\\}"      # \ → \\
+  str="${str//\"/\\\"}"      # " → \"
+  str="${str//$'\n'/\\n}"    # newline → \n
+  str="${str//$'\t'/\\t}"    # tab → \t
+  str="${str//$'\r'/\\r}"    # carriage return → \r
+  printf '%s' "$str"
+}
+
 # Get available disk space in GB
 get_free_space_gb() {
   local free_space
@@ -83,6 +96,122 @@ get_free_space_gb() {
   else
     echo "0"
   fi
+}
+
+# Compare semantic versions (returns 0 if v1>=v2, 1 if v1<v2)
+version_gte() {
+  local v1="${1:-0.0.0}"
+  local v2="${2:-0.0.0}"
+
+  # Try sort -V first (GNU coreutils), fallback to manual comparison
+  if command_exists gsort; then
+    # macOS with Homebrew coreutils
+    if [[ "$(printf '%s\n%s' "$v2" "$v1" | gsort -V | head -n1)" == "$v2" ]]; then
+      return 0
+    fi
+    return 1
+  elif sort --version 2>/dev/null | grep -q "GNU"; then
+    # GNU sort available
+    if [[ "$(printf '%s\n%s' "$v2" "$v1" | sort -V | head -n1)" == "$v2" ]]; then
+      return 0
+    fi
+    return 1
+  else
+    # Manual version comparison fallback (IFS in subshell to avoid side effects)
+    local -a v1_parts v2_parts
+    IFS='.' read -ra v1_parts <<< "$v1"
+    IFS='.' read -ra v2_parts <<< "$v2"
+
+    local max_len="${#v1_parts[@]}"
+    [[ ${#v2_parts[@]} -gt $max_len ]] && max_len="${#v2_parts[@]}"
+
+    for ((i=0; i<max_len; i++)); do
+      local p1="${v1_parts[i]:-0}"
+      local p2="${v2_parts[i]:-0}"
+      # Remove non-numeric characters
+      p1="${p1//[^0-9]/}"
+      p2="${p2//[^0-9]/}"
+      p1="${p1:-0}"
+      p2="${p2:-0}"
+
+      if ((p1 > p2)); then
+        return 0  # v1 > v2
+      elif ((p1 < p2)); then
+        return 1  # v1 < v2
+      fi
+    done
+    return 0  # v1 == v2
+  fi
+}
+
+# Check Ollama version
+check_ollama_version() {
+  local version_output
+  local current_version
+
+  version_output=$(ollama --version 2>&1 | head -1)
+
+  # Extract version number (e.g., "ollama version is 0.15.2" -> "0.15.2")
+  if [[ $version_output =~ ([0-9]+\.[0-9]+\.?[0-9]*) ]]; then
+    current_version="${BASH_REMATCH[1]}"
+
+    if ! version_gte "$current_version" "$MIN_OLLAMA_VERSION"; then
+      log_warning "Ollama Version $current_version ist älter als empfohlen ($MIN_OLLAMA_VERSION)"
+      log_info "Update empfohlen: brew upgrade ollama"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# Check for GPU/accelerator availability
+check_gpu_available() {
+  # macOS: Check for Apple Silicon (Metal acceleration)
+  if [[ "$(uname)" == "Darwin" ]]; then
+    local cpu_brand
+    cpu_brand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "")
+
+    if [[ "$cpu_brand" == *"Apple"* ]]; then
+      echo "apple_silicon"
+      return 0
+    fi
+  fi
+
+  # Check for NVIDIA GPU
+  if command_exists nvidia-smi; then
+    if nvidia-smi &>/dev/null; then
+      echo "nvidia"
+      return 0
+    fi
+  fi
+
+  echo "cpu"
+  return 1
+}
+
+# Test model inference
+test_model_inference() {
+  local model="${1:-$MODEL_NAME}"
+
+  log_info "Teste Model-Inference..."
+
+  # Properly escape model name for JSON (handles \, ", and control chars)
+  local escaped_model
+  escaped_model=$(json_escape_string "$model")
+
+  local response
+  response=$(curl -sf --max-time 60 "${OLLAMA_API_URL}/api/generate" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Say OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
+    2>/dev/null) || true
+
+  if [[ -n "$response" ]] && echo "$response" | grep -q '"response"'; then
+    log_success "Model-Inference-Test erfolgreich"
+    return 0
+  fi
+
+  log_warning "Model-Inference-Test fehlgeschlagen"
+  return 1
 }
 
 # Wait for Ollama server to be ready
@@ -153,6 +282,24 @@ preflight_checks() {
   fi
 
   log_success "Netzwerkverbindung OK"
+
+  # Check GPU/accelerator availability
+  local gpu_type
+  gpu_type=$(check_gpu_available)
+
+  case "$gpu_type" in
+    apple_silicon)
+      log_success "Apple Silicon erkannt (Metal-Beschleunigung)"
+      ;;
+    nvidia)
+      log_success "NVIDIA GPU erkannt (CUDA-Beschleunigung)"
+      ;;
+    *)
+      log_warning "Keine GPU erkannt - CPU-Inferenz (langsamer)"
+      log_info "Erste Inferenz kann 30-60 Sekunden dauern"
+      ;;
+  esac
+
   echo ""
 }
 
@@ -160,8 +307,51 @@ preflight_checks() {
 # Ollama Installation
 # ============================================================================
 
+# Check if port is in use
+port_in_use() {
+  local port="${1:-11434}"
+  if command_exists lsof; then
+    lsof -i ":${port}" &>/dev/null
+  elif command_exists nc; then
+    nc -z 127.0.0.1 "${port}" &>/dev/null
+  elif [[ "$BASH_VERSION" ]]; then
+    # Bash-specific /dev/tcp feature
+    (echo >/dev/tcp/127.0.0.1/"${port}") 2>/dev/null
+  else
+    # No port checking tool available - assume port is free
+    # This is safer than a broken check (false positives are worse than false negatives here)
+    return 1
+  fi
+}
+
 # Start Ollama server (handles both app and CLI installations)
 start_ollama_server() {
+  # First check if server is already responding
+  if curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
+    log_success "Ollama Server läuft bereits"
+    return 0
+  fi
+
+  # Check if port is in use (server might be starting up)
+  if port_in_use 11434; then
+    log_info "Port 11434 ist belegt, warte auf Ollama API..."
+
+    # Give it more time - server might be starting
+    for i in {1..10}; do
+      sleep 1
+      if curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
+        log_success "Ollama Server ist bereit"
+        return 0
+      fi
+    done
+
+    log_warning "Port 11434 belegt, aber Ollama API antwortet nicht"
+    log_info "Prüfen mit: lsof -i :11434"
+    return 1
+  fi
+
+  # Port is free, try to start server
+
   # Try launchd first (Ollama.app installation)
   if [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]]; then
     launchctl load ~/Library/LaunchAgents/com.ollama.ollama.plist 2>/dev/null || true
@@ -177,7 +367,18 @@ start_ollama_server() {
   # Fallback: start ollama serve in background
   if command_exists ollama; then
     nohup ollama serve &>/dev/null &
-    return 0
+    local ollama_pid=$!
+
+    # Brief wait to check if process started successfully
+    sleep 2
+
+    # Verify process is still running
+    if kill -0 "$ollama_pid" 2>/dev/null; then
+      return 0
+    else
+      log_warning "Ollama process failed to start or exited immediately"
+      return 1
+    fi
   fi
 
   return 1
@@ -192,16 +393,28 @@ install_ollama() {
     version=$(ollama --version 2>/dev/null | head -1 || echo "unknown")
     log_info "Version: ${version}"
 
+    # Check minimum version
+    check_ollama_version || true
+
     # Ensure server is running
     if ! curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
-      log_warning "Ollama Server läuft nicht, starte..."
-      start_ollama_server
+      log_info "Prüfe Ollama Server..."
+
+      if ! start_ollama_server; then
+        log_error "Konnte Ollama Server nicht starten"
+        log_info "Falls ein anderer Prozess Port 11434 nutzt: lsof -i :11434"
+        log_info "Sonst manuell starten: ollama serve"
+        exit 1
+      fi
 
       # Wait for server
       if ! wait_for_ollama; then
-        log_error "Bitte starte Ollama manuell: 'ollama serve'"
+        log_error "Ollama Server antwortet nicht"
+        log_info "Bitte manuell starten: ollama serve"
         exit 1
       fi
+    else
+      log_success "Ollama Server läuft"
     fi
 
     return 0
@@ -254,8 +467,11 @@ install_ollama() {
 pull_base_model() {
   log_info "Prüfe Modell: ${MODEL_NAME}"
 
-  # Check if model exists (exact match with whitespace delimiter)
-  if ollama list 2>/dev/null | grep -qE "^${MODEL_NAME}[[:space:]]"; then
+  # Check if model exists (escape regex special chars in model name)
+  local escaped_model_name
+  escaped_model_name=$(printf '%s' "$MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
+
+  if ollama list 2>/dev/null | grep -qE "^${escaped_model_name}[[:space:]]"; then
     log_success "Modell bereits vorhanden: ${MODEL_NAME}"
     return 0
   fi
@@ -275,20 +491,26 @@ pull_base_model() {
 create_custom_model() {
   log_info "Prüfe Custom-Modell: ${CUSTOM_MODEL_NAME}"
 
-  # Check if custom model exists (exact match with whitespace delimiter)
-  if ollama list 2>/dev/null | grep -qE "^${CUSTOM_MODEL_NAME}[[:space:]]"; then
+  # Check if custom model exists (escape regex special chars in model name)
+  local escaped_custom_model_name
+  escaped_custom_model_name=$(printf '%s' "$CUSTOM_MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
+
+  if ollama list 2>/dev/null | grep -qE "^${escaped_custom_model_name}[[:space:]]"; then
     log_success "Custom-Modell bereits vorhanden"
     return 0
   fi
 
   log_info "Erstelle optimiertes Custom-Modell..."
 
-  # Create temporary Modelfile
+  # Create temporary Modelfile with unique name
   local modelfile
-  modelfile=$(mktemp)
+  modelfile=$(mktemp -t hablara-modelfile.XXXXXX)
 
-  cat > "${modelfile}" << 'EOF'
-FROM qwen2.5:7b
+  # Note: We rely on manual cleanup below instead of trap to avoid
+  # clobbering the global cleanup handler set at script start
+  # Use MODEL_NAME variable for consistency (unquoted heredoc to allow expansion)
+  cat > "${modelfile}" <<EOF
+FROM ${MODEL_NAME}
 
 # Optimized parameters for Hablará emotion/fallacy detection
 PARAMETER temperature 0.3
@@ -303,7 +525,7 @@ EOF
   local create_result=0
   ollama create "${CUSTOM_MODEL_NAME}" -f "${modelfile}" || create_result=$?
 
-  # ALWAYS cleanup temp file (no trap override - preserves global cleanup handler)
+  # ALWAYS cleanup temp file (even on error)
   rm -f "${modelfile}"
 
   if [[ $create_result -ne 0 ]]; then
@@ -337,8 +559,13 @@ verify_installation() {
     return 1
   fi
 
+  # Escape regex special chars in model names
+  local escaped_model_name escaped_custom_model_name
+  escaped_model_name=$(printf '%s' "$MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
+  escaped_custom_model_name=$(printf '%s' "$CUSTOM_MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
+
   # Check base model (exact match)
-  if ! ollama list 2>/dev/null | grep -qE "^${MODEL_NAME}[[:space:]]"; then
+  if ! ollama list 2>/dev/null | grep -qE "^${escaped_model_name}[[:space:]]"; then
     log_error "Basis-Modell nicht gefunden: ${MODEL_NAME}"
     return 1
   fi
@@ -346,10 +573,18 @@ verify_installation() {
   log_success "Basis-Modell verfügbar: ${MODEL_NAME}"
 
   # Check custom model (optional, exact match)
-  if ollama list 2>/dev/null | grep -qE "^${CUSTOM_MODEL_NAME}[[:space:]]"; then
+  local test_model="$MODEL_NAME"
+  if ollama list 2>/dev/null | grep -qE "^${escaped_custom_model_name}[[:space:]]"; then
     log_success "Custom-Modell verfügbar: ${CUSTOM_MODEL_NAME}"
+    test_model="$CUSTOM_MODEL_NAME"
   else
     log_warning "Custom-Modell nicht verfügbar (verwende Basis-Modell)"
+  fi
+
+  # Test inference to verify model works
+  if ! test_model_inference "$test_model"; then
+    log_warning "Modell geladen, aber Inference-Test fehlgeschlagen"
+    log_info "Das Modell könnte trotzdem funktionieren - teste es in der App"
   fi
 
   echo ""

@@ -1,6 +1,37 @@
+---
+diataxis-type: reference
+status: production
+version: 1.0.0
+last_updated: 2026-02-04
+---
+
 # Hablará Documentation
 
-Dokumentation für End-User und Contributors.
+## TL;DR (20 words)
+
+End-User Dokumentation fuer Hablará: Guides (Recording, Storage, FAQ), Reference (Hotkeys), Legal (Privacy, Licenses).
+
+---
+
+## Essential Context
+
+> **DIATAXIS Category**: Reference (Navigation Hub)
+> **Audience**: End-Users und Contributors
+
+**Zweck**: Zentrale Navigation fuer alle End-User-Dokumentation (Guides, Reference, Legal).
+
+**Scope**: 7 Dokumente in 4 Kategorien (Getting Started, Guides, Reference, Legal).
+
+**Key Points**:
+- Guides: Recording-Qualität, Storage-Management, FAQ
+- Reference: Hotkey-Konfiguration
+- Legal: Privacy, Support, Third-Party Licenses
+
+**Quick Access**:
+- [Schnelleinstieg](#schnelleinstieg)
+- [Guides](#guides)
+- [Reference](#reference)
+- [Legal](#legal)
 
 ---
 
@@ -21,7 +52,7 @@ Dokumentation für End-User und Contributors.
 
 ```
 docs/
-├── getting-started/       # Tutorials – Schritt für Schritt lernen (leer)
+├── getting-started/       # Tutorials – Schritt für Schritt lernen
 ├── guides/                # How-To – Spezifische Aufgaben lösen
 │   ├── RECORDING_QUALITY.md   # LED-Meter, Mikrofon-Tipps, Speech Ratio
 │   ├── STORAGE.md             # Aufnahmen verwalten, WAV-Export
@@ -55,3 +86,18 @@ docs/
 - [Datenschutzerklärung](./legal/PRIVACY.md)
 - [Support & Kontakt](./legal/SUPPORT.md)
 - [Drittanbieter-Lizenzen](./legal/THIRD_PARTY_LICENSES.md)
+
+---
+
+## Cross-References
+
+### Project Documentation
+- **[../README.md](../README.md)** - Haupt-README mit Installation
+- **[../CLAUDE.md](../CLAUDE.md)** - Projekt-Einstiegspunkt
+
+---
+
+**Version**: 1.0.0
+**Created**: 28. Januar 2026
+**Last Updated**: 4. Februar 2026
+**Status**: Production

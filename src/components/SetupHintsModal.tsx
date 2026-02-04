@@ -20,6 +20,7 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { X, CheckCircle2, Info, Lock, HardDrive, Copy, Check } from "lucide-react";
 import { STORAGE_KEYS, ONBOARDING_TIMINGS } from "@/lib/types";
 import { logger } from "@/lib/logger";
+import { isWindows } from "@/lib/utils";
 
 interface SetupHintsModalProps {
   /** Whether the modal is currently visible */
@@ -77,9 +78,14 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
     onClose(false);
   }, [isClosing, onClose]);
 
+  // Platform-specific setup commands
+  const setupCommand = isWindows()
+    ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
+    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash";
+
   // Copy terminal command to clipboard
   const handleCopyCommand = useCallback(async () => {
-    const command = "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash";
+    const command = setupCommand;
 
     // Clear any existing timeout
     if (copyTimeoutRef.current) {
@@ -99,7 +105,7 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
     } catch (error) {
       logger.error("SetupHintsModal", "Failed to copy command to clipboard", error);
     }
-  }, []);
+  }, [setupCommand]);
 
   // Escape key handler
   useEffect(() => {
@@ -239,7 +245,7 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
             <h3 className="text-sm font-medium text-slate-900 dark:text-white">Terminal-Befehl:</h3>
             <div className="relative bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 pr-12">
               <code className="text-xs text-green-700 dark:text-green-400 font-mono break-all">
-                curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+                {setupCommand}
               </code>
               <button
                 onClick={handleCopyCommand}
