@@ -266,6 +266,9 @@ flamegraph.svg
 *.exe
 !scripts/*.sh
 
+# WebView2 Offline Installer (downloaded for Microsoft Store builds)
+/src-tauri/WebView2RuntimeInstaller.exe
+
 # =============================================================================
 # Personal & Sensitive Files
 # =============================================================================

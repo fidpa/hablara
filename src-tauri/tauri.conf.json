@@ -48,6 +48,7 @@
     ],
     "resources": [
       "resources/models/silero_vad_v4.onnx",
+      "resources/onnxruntime.dll",
       "binaries/whisper-*",
       "models/ggml-german-turbo.bin",
       "../public/models",

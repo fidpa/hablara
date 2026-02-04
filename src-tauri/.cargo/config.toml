@@ -1,0 +1,7 @@
+# Rust/Cargo Build Configuration
+# Guidelines: Static CRT linking for Windows to avoid VCRUNTIME140.dll dependency
+
+[target.x86_64-pc-windows-msvc]
+# Static linking of C runtime - eliminates VCRUNTIME140.dll dependency
+# Required for Microsoft Store apps to work on fresh Windows installations
+rustflags = ["-C", "target-feature=+crt-static"]

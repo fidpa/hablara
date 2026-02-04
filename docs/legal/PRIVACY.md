@@ -2,7 +2,7 @@
 
 **Hablará**
 
-*Letzte Aktualisierung: 2. Februar 2026*
+*Letzte Aktualisierung: 4. Februar 2026*
 
 ---
 
@@ -16,7 +16,7 @@ GitHub: https://github.com/fidpa/hablara
 
 ### 2. Überblick
 
-Hablará ist eine Desktop-Anwendung für macOS, die Sprachaufnahmen transkribiert und mit KI-gestützter Analyse anreichert. **Datenschutz steht im Mittelpunkt:** Die Verarbeitung erfolgt standardmäßig lokal auf deinem Mac.
+Hablará ist eine Desktop-Anwendung für macOS und Windows, die Sprachaufnahmen transkribiert und mit KI-gestützter Analyse anreichert. **Datenschutz steht im Mittelpunkt:** Die Verarbeitung erfolgt standardmäßig lokal auf deinem Computer.
 
 ### 3. Welche Daten werden verarbeitet?
 
@@ -25,8 +25,8 @@ Hablará ist eine Desktop-Anwendung für macOS, die Sprachaufnahmen transkribier
 | Aspekt | Details |
 |--------|---------|
 | **Was** | Mikrofonaufnahmen während der Nutzung |
-| **Wo verarbeitet** | Lokal auf deinem Mac |
-| **Wo gespeichert** | `~/Hablara/recordings/` |
+| **Wo verarbeitet** | Lokal auf deinem Computer |
+| **Wo gespeichert** | macOS: `~/Hablara/recordings/` · Windows: `%APPDATA%\Hablara\recordings\` |
 | **Wie lange** | Bis du sie manuell löschst |
 | **An Dritte gesendet** | ❌ Nein (niemals) |
 
@@ -36,7 +36,7 @@ Hablará ist eine Desktop-Anwendung für macOS, die Sprachaufnahmen transkribier
 |--------|---------|
 | **Was** | Textausgabe der Spracherkennung |
 | **Wo verarbeitet** | Lokal (Whisper) oder Cloud (optional) |
-| **Wo gespeichert** | Lokal auf deinem Mac |
+| **Wo gespeichert** | Lokal auf deinem Computer |
 | **An Dritte gesendet** | ⚠️ Nur bei Cloud-LLM (siehe 4.2) |
 
 #### 3.3 API-Schlüssel
@@ -44,7 +44,7 @@ Hablará ist eine Desktop-Anwendung für macOS, die Sprachaufnahmen transkribier
 | Aspekt | Details |
 |--------|---------|
 | **Was** | OpenAI/Anthropic API Keys (optional) |
-| **Wo gespeichert** | macOS Keychain (AES-256 verschlüsselt) |
+| **Wo gespeichert** | macOS: Keychain · Windows: Credential Manager (verschlüsselt) |
 | **An Dritte gesendet** | ❌ Nein |
 
 ### 4. Datenverarbeitung
@@ -53,11 +53,11 @@ Hablará ist eine Desktop-Anwendung für macOS, die Sprachaufnahmen transkribier
 
 Standardmäßig werden alle Daten **ausschließlich lokal** verarbeitet:
 
-- **Spracherkennung:** whisper.cpp (läuft auf deinem Mac)
-- **KI-Analyse:** Ollama (läuft auf deinem Mac)
+- **Spracherkennung:** whisper.cpp (läuft auf deinem Computer)
+- **KI-Analyse:** Ollama (läuft auf deinem Computer)
 - **Speicherung:** Lokaler Ordner, keine Cloud
 
-**Keine Daten verlassen deinen Mac**, solange du keine Cloud-Dienste aktivierst.
+**Keine Daten verlassen deinen Computer**, solange du keine Cloud-Dienste aktivierst.
 
 #### 4.2 Cloud-Verarbeitung (Optional)
 
@@ -79,7 +79,7 @@ Du hast folgende Rechte:
 
 | Recht | Wie ausüben |
 |-------|-------------|
-| **Auskunft** | Alle Daten liegen in `~/Hablara/recordings/` |
+| **Auskunft** | Alle Daten liegen lokal (macOS: `~/Hablara/` · Windows: `%APPDATA%\Hablara\`) |
 | **Löschung** | Einstellungen → Speicher → "Alle Aufnahmen löschen" |
 | **Widerspruch** | Cloud-LLM in Einstellungen deaktivieren |
 | **Datenportabilität** | Aufnahmen als WAV + JSON exportierbar |
@@ -97,9 +97,9 @@ Hablará:
 
 | Maßnahme | Details |
 |----------|---------|
-| **API-Keys** | AES-256 verschlüsselt in macOS Keychain |
+| **API-Keys** | Verschlüsselt (macOS: Keychain · Windows: Credential Manager) |
 | **Netzwerk** | HTTPS für alle Cloud-Verbindungen |
-| **Lokale Daten** | Unverschlüsselt (dein Mac, deine Verantwortung) |
+| **Lokale Daten** | Unverschlüsselt (dein Computer, deine Verantwortung) |
 
 ### 8. Änderungen
 
@@ -123,7 +123,7 @@ GitHub: https://github.com/fidpa/hablara
 
 ### 2. Overview
 
-Hablará is a macOS desktop application that transcribes voice recordings and enriches them with AI-powered analysis. **Privacy is core:** Processing happens locally on your Mac by default.
+Hablará is a desktop application for macOS and Windows that transcribes voice recordings and enriches them with AI-powered analysis. **Privacy is core:** Processing happens locally on your computer by default.
 
 ### 3. What Data is Processed?
 
@@ -132,8 +132,8 @@ Hablará is a macOS desktop application that transcribes voice recordings and en
 | Aspect | Details |
 |--------|---------|
 | **What** | Microphone recordings during use |
-| **Where processed** | Locally on your Mac |
-| **Where stored** | `~/Hablara/recordings/` |
+| **Where processed** | Locally on your computer |
+| **Where stored** | macOS: `~/Hablara/recordings/` · Windows: `%APPDATA%\Hablara\recordings\` |
 | **How long** | Until you manually delete them |
 | **Sent to third parties** | ❌ No (never) |
 
@@ -143,7 +143,7 @@ Hablará is a macOS desktop application that transcribes voice recordings and en
 |--------|---------|
 | **What** | Text output from speech recognition |
 | **Where processed** | Locally (Whisper) or Cloud (optional) |
-| **Where stored** | Locally on your Mac |
+| **Where stored** | Locally on your computer |
 | **Sent to third parties** | ⚠️ Only with Cloud LLM (see 4.2) |
 
 #### 3.3 API Keys
@@ -151,7 +151,7 @@ Hablará is a macOS desktop application that transcribes voice recordings and en
 | Aspect | Details |
 |--------|---------|
 | **What** | OpenAI/Anthropic API keys (optional) |
-| **Where stored** | macOS Keychain (AES-256 encrypted) |
+| **Where stored** | macOS: Keychain · Windows: Credential Manager (encrypted) |
 | **Sent to third parties** | ❌ No |
 
 ### 4. Data Processing
@@ -160,11 +160,11 @@ Hablará is a macOS desktop application that transcribes voice recordings and en
 
 By default, all data is processed **exclusively locally**:
 
-- **Speech recognition:** whisper.cpp (runs on your Mac)
-- **AI analysis:** Ollama (runs on your Mac)
+- **Speech recognition:** whisper.cpp (runs on your computer)
+- **AI analysis:** Ollama (runs on your computer)
 - **Storage:** Local folder, no cloud
 
-**No data leaves your Mac** unless you enable cloud services.
+**No data leaves your computer** unless you enable cloud services.
 
 #### 4.2 Cloud Processing (Optional)
 
@@ -186,7 +186,7 @@ You have the following rights:
 
 | Right | How to exercise |
 |-------|-----------------|
-| **Access** | All data is in `~/Hablara/recordings/` |
+| **Access** | All data is stored locally (macOS: `~/Hablara/` · Windows: `%APPDATA%\Hablara\`) |
 | **Deletion** | Settings → Storage → "Delete all recordings" |
 | **Objection** | Disable Cloud LLM in settings |
 | **Portability** | Recordings exportable as WAV + JSON |
@@ -204,9 +204,9 @@ Hablará:
 
 | Measure | Details |
 |---------|---------|
-| **API Keys** | AES-256 encrypted in macOS Keychain |
+| **API Keys** | Encrypted (macOS: Keychain · Windows: Credential Manager) |
 | **Network** | HTTPS for all cloud connections |
-| **Local Data** | Unencrypted (your Mac, your responsibility) |
+| **Local Data** | Unencrypted (your computer, your responsibility) |
 
 ### 8. Changes
 
@@ -220,5 +220,5 @@ For privacy questions:
 
 ---
 
-**Version:** 1.0.0
-**Effective Date:** February 2, 2026
+**Version:** 1.1.0
+**Effective Date:** February 4, 2026

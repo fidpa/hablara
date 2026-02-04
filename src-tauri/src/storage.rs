@@ -298,6 +298,8 @@ impl StorageManager {
     fn ensure_storage_dir(&self) -> Result<PathBuf, String> {
         let config = self.get_config()?;
         let path = PathBuf::from(&config.storage_path);
+        // Apply Windows Long Path prefix if path exceeds 260 chars
+        let path = crate::commands::utils::path::to_long_path(&path);
 
         if !path.exists() {
             std::fs::create_dir_all(&path)

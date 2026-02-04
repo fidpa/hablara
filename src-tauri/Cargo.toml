@@ -80,7 +80,9 @@ codegen-units = 1
 panic = "abort"
 
 [features]
-# App Store build: sandboxed, menu bar only (no global hotkeys)
+# Mac App Store build: sandboxed, menu bar only (no global hotkeys)
 app-store = []
+# Microsoft Store build: MSI with offline WebView2 installer
+microsoft-store = []
 # Direct Distribution (default): non-sandboxed, global hotkeys enabled
 default = []

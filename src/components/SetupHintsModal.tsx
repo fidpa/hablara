@@ -20,7 +20,6 @@ import { useCallback, useEffect, useState, useRef } from "react";
 import { X, CheckCircle2, Info, Lock, HardDrive, Copy, Check } from "lucide-react";
 import { STORAGE_KEYS, ONBOARDING_TIMINGS } from "@/lib/types";
 import { logger } from "@/lib/logger";
-import { isWindows } from "@/lib/utils";
 
 interface SetupHintsModalProps {
   /** Whether the modal is currently visible */
@@ -78,24 +77,21 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
     onClose(false);
   }, [isClosing, onClose]);
 
-  // Platform-specific setup commands
-  const setupCommand = isWindows()
-    ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
-    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash";
+  // Ollama download URL and model pull command
+  const ollamaDownloadUrl = "https://ollama.com/download";
+  const modelPullCommand = "ollama pull qwen2.5:7b";
 
-  // Copy terminal command to clipboard
+  // Copy model pull command to clipboard
   const handleCopyCommand = useCallback(async () => {
-    const command = setupCommand;
-
     // Clear any existing timeout
     if (copyTimeoutRef.current) {
       clearTimeout(copyTimeoutRef.current);
     }
 
     try {
-      await navigator.clipboard.writeText(command);
+      await navigator.clipboard.writeText(modelPullCommand);
       setIsCopied(true);
-      logger.info("SetupHintsModal", "Setup command copied to clipboard");
+      logger.info("SetupHintsModal", "Model pull command copied to clipboard");
 
       // Reset copied state after delay
       copyTimeoutRef.current = setTimeout(() => {
@@ -105,7 +101,20 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
     } catch (error) {
       logger.error("SetupHintsModal", "Failed to copy command to clipboard", error);
     }
-  }, [setupCommand]);
+  }, [modelPullCommand]);
+
+  // Open Ollama download page
+  const handleOpenOllamaDownload = useCallback(async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-shell");
+      await open(ollamaDownloadUrl);
+      logger.info("SetupHintsModal", "Opened Ollama download page");
+    } catch (error) {
+      logger.error("SetupHintsModal", "Failed to open Ollama download page", error);
+      // Fallback: try window.open
+      window.open(ollamaDownloadUrl, "_blank");
+    }
+  }, [ollamaDownloadUrl]);
 
   // Escape key handler
   useEffect(() => {
@@ -213,39 +222,44 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
                 <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <span>
                   <span className="font-medium">1. Ollama installieren</span>
-                  <span className="text-slate-500 dark:text-slate-400 block">Automatische Installation via Script</span>
+                  <span className="text-slate-500 dark:text-slate-400 block">Von der offiziellen Website herunterladen</span>
                 </span>
               </div>
               <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <span>
                   <span className="font-medium">2. KI-Modell herunterladen</span>
-                  <span className="text-slate-500 dark:text-slate-400 block">qwen2.5:7b (~4.7 GB)</span>
+                  <span className="text-slate-500 dark:text-slate-400 block">Terminal: ollama pull qwen2.5:7b (~4.7 GB)</span>
                 </span>
               </div>
               <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <span>
-                  <span className="font-medium">3. Modell optimieren</span>
-                  <span className="text-slate-500 dark:text-slate-400 block">Custom Modelfile mit Hablará-Prompts</span>
-                </span>
-              </div>
-              <div className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                <span>
-                  <span className="font-medium">4. Installation verifizieren</span>
-                  <span className="text-slate-500 dark:text-slate-400 block">Automatischer Funktionstest</span>
+                  <span className="font-medium">3. Hablará neu starten</span>
+                  <span className="text-slate-500 dark:text-slate-400 block">Ollama wird automatisch erkannt</span>
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Terminal Command */}
+          {/* Ollama Download Button */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-slate-900 dark:text-white">Schritt 1: Ollama installieren</h3>
+            <button
+              onClick={handleOpenOllamaDownload}
+              className="w-full px-4 py-3 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <span>Ollama herunterladen</span>
+              <span className="text-emerald-200">→ ollama.com</span>
+            </button>
+          </div>
+
+          {/* Model Pull Command */}
           <div className="space-y-2">
-            <h3 className="text-sm font-medium text-slate-900 dark:text-white">Terminal-Befehl:</h3>
+            <h3 className="text-sm font-medium text-slate-900 dark:text-white">Schritt 2: Modell laden (Terminal)</h3>
             <div className="relative bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-3 pr-12">
-              <code className="text-xs text-green-700 dark:text-green-400 font-mono break-all">
-                {setupCommand}
+              <code className="text-sm text-green-700 dark:text-green-400 font-mono">
+                {modelPullCommand}
               </code>
               <button
                 onClick={handleCopyCommand}
@@ -261,7 +275,7 @@ export function SetupHintsModal({ isOpen, onClose }: SetupHintsModalProps) {
               </button>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              💡 {isCopied ? "In Zwischenablage kopiert!" : "Befehl kopieren und in Terminal einfügen"}
+              💡 {isCopied ? "In Zwischenablage kopiert!" : "Nach Ollama-Installation im Terminal ausführen"}
             </p>
           </div>
 

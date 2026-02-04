@@ -147,6 +147,32 @@ pub fn find_vad_model_path(app_handle: &tauri::AppHandle) -> Result<PathBuf, Str
     ))
 }
 
+/// Convert path to Windows Long Path format if needed (>260 chars)
+///
+/// Windows has a traditional 260-character path limit. For paths exceeding this,
+/// the `\\?\` prefix enables long path support (Windows 10 1607+).
+///
+/// On non-Windows platforms, returns the path unchanged.
+#[cfg(target_os = "windows")]
+pub fn to_long_path(path: &std::path::Path) -> std::path::PathBuf {
+    let path_str = path.to_string_lossy();
+    // Already a long path or UNC path
+    if path_str.starts_with("\\\\?\\") || path_str.starts_with("\\\\") {
+        return path.to_path_buf();
+    }
+    // Only convert if path exceeds Windows limit
+    if path_str.len() > 260 {
+        std::path::PathBuf::from(format!("\\\\?\\{}", path.display()))
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn to_long_path(path: &std::path::Path) -> std::path::PathBuf {
+    path.to_path_buf()
+}
+
 /// Get the target triple for the current platform
 pub fn get_target_triple() -> Result<&'static str, String> {
     if cfg!(target_arch = "aarch64") && cfg!(target_os = "macos") {
@@ -159,5 +185,76 @@ pub fn get_target_triple() -> Result<&'static str, String> {
         Ok("x86_64-pc-windows-msvc")
     } else {
         Err("Unsupported platform".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_to_long_path_short_path() {
+        let short = PathBuf::from("/some/short/path");
+        let result = to_long_path(&short);
+        // Short paths should remain unchanged
+        assert_eq!(result, short);
+    }
+
+    #[test]
+    fn test_to_long_path_preserves_path_unchanged_on_non_windows() {
+        // On non-Windows, paths should always be returned unchanged
+        let path = PathBuf::from("/a/very/normal/path/to/some/file.txt");
+        let result = to_long_path(&path);
+        assert_eq!(result, path);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_to_long_path_already_long_path_format() {
+        let already_long = PathBuf::from("\\\\?\\C:\\some\\path");
+        let result = to_long_path(&already_long);
+        // Already prefixed paths should remain unchanged
+        assert_eq!(result, already_long);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_to_long_path_unc_path() {
+        let unc = PathBuf::from("\\\\server\\share\\path");
+        let result = to_long_path(&unc);
+        // UNC paths should remain unchanged
+        assert_eq!(result, unc);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_to_long_path_converts_long_path() {
+        // Create a path > 260 characters
+        let long_component = "a".repeat(250);
+        let long_path = PathBuf::from(format!("C:\\{}\\file.txt", long_component));
+        let result = to_long_path(&long_path);
+        // Should be prefixed with \\?\
+        assert!(result.to_string_lossy().starts_with("\\\\?\\"));
+    }
+
+    #[test]
+    fn test_expand_tilde_home() {
+        let result = expand_tilde("~");
+        // Should return home directory or fallback
+        assert!(!result.to_string_lossy().contains("~"));
+    }
+
+    #[test]
+    fn test_expand_tilde_with_path() {
+        let result = expand_tilde("~/some/path");
+        assert!(!result.to_string_lossy().starts_with("~/"));
+        assert!(result.to_string_lossy().contains("some"));
+    }
+
+    #[test]
+    fn test_expand_tilde_absolute_path() {
+        let path = "/absolute/path";
+        let result = expand_tilde(path);
+        assert_eq!(result, PathBuf::from(path));
     }
 }

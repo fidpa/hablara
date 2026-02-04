@@ -1,0 +1,184 @@
+# ============================================================================
+# Hablará - Microsoft Store Build Workflow
+# ============================================================================
+# Builds Windows MSI installer optimized for Microsoft Store submission.
+#
+# Differences from regular windows-build.yml:
+# - Uses offlineInstaller for WebView2 (Windows 10 compatibility)
+# - MSI-only output (no NSIS)
+# - NOT code-signed (Microsoft signs Store apps automatically)
+#
+# Output: Unsigned MSI ready for Partner Center upload
+# ============================================================================
+
+name: Windows Store Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-store:
+    name: Build Windows Store MSI
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ========================================
+      # Download WebView2 Offline Installer (cached)
+      # ========================================
+      - name: Cache WebView2 Installer
+        id: cache-webview2
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/WebView2RuntimeInstaller.exe
+          key: webview2-evergreen-standalone-v1
+
+      - name: Download WebView2 Offline Installer
+        if: steps.cache-webview2.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Downloading WebView2 Evergreen Standalone Installer..."
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "src-tauri/WebView2RuntimeInstaller.exe" -UseBasicParsing
+          $size = (Get-Item "src-tauri/WebView2RuntimeInstaller.exe").Length / 1MB
+          Write-Host "Downloaded WebView2 Installer: $([math]::Round($size, 2)) MB"
+
+      # ========================================
+      # Build whisper.cpp for Windows
+      # ========================================
+      - name: Cache whisper model
+        id: cache-whisper-model
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper german-turbo model
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/models
+          Write-Host "Downloading german-turbo model (1.62 GB)..."
+          Invoke-WebRequest -Uri "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" -OutFile "src-tauri/models/ggml-german-turbo.bin"
+          Get-Item src-tauri/models/ggml-german-turbo.bin
+          Write-Host "Model downloaded"
+
+      - name: Build whisper.cpp for Windows
+        shell: pwsh
+        run: |
+          Write-Host "Cloning whisper.cpp (pinned to v1.7.3)..."
+          git clone --depth 1 --branch v1.7.3 https://github.com/ggml-org/whisper.cpp.git C:\whisper-build
+          Set-Location C:\whisper-build
+
+          Write-Host "Building for x86_64..."
+          cmake -B build -S . `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DWHISPER_BUILD_EXAMPLES=ON
+
+          cmake --build build --config Release
+
+          # Copy binary
+          $BINARY = "build/bin/Release/whisper-cli.exe"
+          if (-not (Test-Path $BINARY)) {
+            $BINARY = "build/bin/whisper-cli.exe"
+          }
+
+          if (-not (Test-Path $BINARY)) {
+            Write-Host "Binary not found"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/src-tauri/binaries"
+          Copy-Item $BINARY "$env:GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-pc-windows-msvc.exe"
+
+          Write-Host "whisper.cpp built for Windows"
+          Get-ChildItem "$env:GITHUB_WORKSPACE/src-tauri/binaries/"
+
+      # ========================================
+      # Build Tauri Windows Store App
+      # ========================================
+      - name: Build Tauri Windows Store MSI
+        shell: pwsh
+        run: |
+          Write-Host "Building Tauri app for Microsoft Store..."
+          pnpm tauri build --features microsoft-store --config src-tauri/tauri.microsoftstore.conf.json --target x86_64-pc-windows-msvc
+
+      - name: List build artifacts
+        shell: pwsh
+        run: |
+          Write-Host "MSI artifacts:"
+          Get-ChildItem -Recurse "src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi" | ForEach-Object {
+            $size = [math]::Round($_.Length / 1MB, 2)
+            Write-Host "  $($_.Name) - $size MB"
+          }
+
+      # ========================================
+      # Upload Artifacts
+      # ========================================
+      - name: Upload MSI for Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-store-msi
+          path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+          retention-days: 30
+
+      - name: Upload WebView2 Installer (for reference)
+        uses: actions/upload-artifact@v4
+        with:
+          name: webview2-installer
+          path: src-tauri/WebView2RuntimeInstaller.exe
+          retention-days: 7
+
+      # ========================================
+      # Summary
+      # ========================================
+      - name: Build Summary
+        shell: pwsh
+        run: |
+          Write-Host ""
+          Write-Host "============================================" -ForegroundColor Cyan
+          Write-Host " Microsoft Store Build Complete!" -ForegroundColor Green
+          Write-Host "============================================" -ForegroundColor Cyan
+          Write-Host ""
+          Write-Host "Next Steps:" -ForegroundColor Yellow
+          Write-Host "1. Download 'windows-store-msi' artifact"
+          Write-Host "2. Test locally with Windows App Certification Kit"
+          Write-Host "3. Upload MSI to Microsoft Partner Center"
+          Write-Host "4. DO NOT sign - Microsoft signs automatically"
+          Write-Host ""
+          Write-Host "Documentation: docs-dev/how-to/porting/WIN11_MICROSOFT_STORE.md"
