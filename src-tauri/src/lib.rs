@@ -16,6 +16,7 @@ mod vad;
 /// Currently supports:
 /// - macOS: MLX availability check, Metal acceleration utilities
 /// - Windows: Placeholder for Phase B (WASAPI, DirectML)
+/// - Linux: Wayland detection, XDG Base Directory paths
 mod platform;
 
 use tauri::Manager;
@@ -147,6 +148,8 @@ pub fn run() {
             // Window commands
             commands::get_window_size,
             commands::validate_window_state,
+            // System commands
+            commands::get_session_type,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

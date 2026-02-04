@@ -1,0 +1,155 @@
+# ============================================================================
+# Hablara - Ubuntu Build Workflow
+# ============================================================================
+# Builds Ubuntu 24.04 LTS packages (.deb + .AppImage) for Hablara desktop app.
+#
+# Triggers:
+# - Tag push (v*) - creates release artifacts
+# - Manual dispatch - for testing
+#
+# Prerequisites:
+# - whisper.cpp is built from source during CI (CMake)
+# - german-turbo model is cached (1.62 GB)
+# ============================================================================
+
+name: Ubuntu Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: "Hablara"
+
+jobs:
+  build-ubuntu:
+    name: Build Ubuntu x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libasound2-dev \
+            cmake \
+            build-essential
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ========================================
+      # Build whisper.cpp for Linux
+      # ========================================
+      - name: Cache whisper model
+        id: cache-whisper-model
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper german-turbo model
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p src-tauri/models
+          echo "Downloading german-turbo model (1.62 GB)..."
+          curl -L --progress-bar \
+            "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" \
+            -o src-tauri/models/ggml-german-turbo.bin
+          ls -lh src-tauri/models/ggml-german-turbo.bin
+          echo "Model downloaded"
+
+      - name: Build whisper.cpp for Linux
+        run: |
+          set -e
+          echo "Cloning whisper.cpp..."
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          cd /tmp/whisper-build
+
+          echo "Building for x86_64..."
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DWHISPER_BUILD_EXAMPLES=ON
+
+          cmake --build build --config Release -j$(nproc)
+
+          # Find and copy binary
+          BINARY="build/bin/whisper-cli"
+          if [ ! -f "$BINARY" ]; then
+            echo "Binary not found at $BINARY"
+            find build -name "whisper-cli" -type f || true
+            exit 1
+          fi
+
+          mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
+          cp "$BINARY" $GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu
+          chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu
+
+          echo "whisper.cpp built for Linux"
+          ls -lh $GITHUB_WORKSPACE/src-tauri/binaries/
+
+      # ========================================
+      # Build Tauri Linux App
+      # ========================================
+      - name: Build Tauri Linux app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Hablara ${{ github.ref_name }}'
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-unknown-linux-gnu
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubuntu-build
+          path: |
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage

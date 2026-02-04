@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Hablará
+GenericName=Voice Transcription Tool
+Comment=Voice Intelligence Platform - Sprache aufnehmen, transkribieren und KI-gestützt anreichern
+Exec=/usr/bin/hablara
+Icon=hablara
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Recorder;Utility;
+StartupWMClass=hablara
+MimeType=audio/wav;audio/x-wav;
+Keywords=voice;recording;transcription;whisper;ai;

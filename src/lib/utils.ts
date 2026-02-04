@@ -193,6 +193,26 @@ export function isWindows(): boolean {
 }
 
 /**
+ * Check if running on Linux (for platform-specific features like Wayland detection)
+ * Uses navigator.userAgentData (modern) with navigator.platform fallback (deprecated but reliable in Tauri)
+ * @returns true if running on Linux, false otherwise
+ */
+export function isLinux(): boolean {
+  if (typeof window === "undefined") return false;
+
+  const nav = navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  if (nav.userAgentData?.platform) {
+    return nav.userAgentData.platform.toLowerCase() === "linux";
+  }
+
+  // Fallback: navigator.platform (deprecated but reliable in Tauri WebView)
+  const platform = navigator.platform?.toLowerCase() || "";
+  return platform.includes("linux");
+}
+
+/**
  * Formatiert Processing-Duration für Badge-Anzeige
  * @param ms Duration in Millisekunden
  * @returns Formatierter String (z.B. "4.2s" oder "850ms")

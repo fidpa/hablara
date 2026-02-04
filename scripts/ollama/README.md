@@ -1,37 +1,19 @@
----
-diataxis-type: reference
-status: production
-version: 1.0.0
-last_updated: 2026-01-28
-scope: Ollama custom model configuration for Hablará LLM inference
----
-
 # Ollama Custom Models für Hablará
 
-## TL;DR (20 words)
+## TL;DR
 
 Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Parametern für Emotion Analysis und Fallacy Detection.
 
 ---
 
-## Essential Context
+## Übersicht
 
-> **DIATAXIS Category:** Reference (Information-Oriented)
-> **Audience:** Hablará-Entwickler und Power-User, die Ollama-Modelle optimieren wollen
-
-**Zweck:** Dokumentiert die drei Custom Ollama Models (7B/14B/32B) mit Hablará-spezifischen Optimierungen (8K Context, Temperature 0.3, System Prompt).
-
-**Scope:** Model-Konfiguration, Setup-Anleitung, Performance-Benchmarks, Troubleshooting für lokale LLM-Inferenz.
+**Zweck:** Custom Ollama Models mit Hablará-spezifischen Optimierungen (8K Context, Temperature 0.3, System Prompt).
 
 **Key Points:**
-- qwen2.5:7b-custom ist Default (beste Balance Speed/Quality)
+- `qwen2.5:7b-custom` ist Default (beste Balance Speed/Quality)
 - 8K Context Window spart 40% RAM vs. 128K Default
 - 92-94% JSON Validity durch deterministische Parameter
-
-**Quick Access:**
-- [Setup](#setup) - 3 Schritte zum Custom Model
-- [Performance-Vergleich](#performance-vergleich) - M4 Pro Benchmarks
-- [Troubleshooting](#troubleshooting) - Häufige Probleme
 
 ---
 
@@ -50,6 +32,20 @@ Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Paramete
 ## Setup
 
 ### 1. Base Model herunterladen
+
+**Automatisch (empfohlen):**
+```bash
+# macOS
+./scripts/setup-ollama-quick.sh
+
+# Linux
+./scripts/setup-ollama-linux.sh
+
+# Windows
+.\scripts\setup-ollama-quick.ps1
+```
+
+**Manuell:**
 ```bash
 # Für 7B (empfohlen)
 ollama pull qwen2.5:7b
@@ -235,11 +231,39 @@ ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile
 ```
 
 ### Ollama nicht erreichbar
+
+**macOS:**
 ```bash
 # Ollama Service starten
 ollama serve
 
-# In separatem Terminal: Verfügbarkeit testen
+# Oder via Homebrew Service
+brew services start ollama
+```
+
+**Linux:**
+```bash
+# Via systemd (empfohlen)
+systemctl --user start ollama
+
+# Oder manuell
+ollama serve
+
+# Status pruefen
+systemctl --user status ollama
+```
+
+**Windows:**
+```powershell
+# Ollama starten
+ollama serve
+
+# Oder als Hintergrund-Prozess
+Start-Process -FilePath ollama -ArgumentList serve -WindowStyle Hidden
+```
+
+**Verfuegbarkeit testen (alle Plattformen):**
+```bash
 curl http://localhost:11434/api/tags
 ```
 
@@ -299,31 +323,10 @@ ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile
 
 ---
 
-## Related Documentation
+## Weitere Dokumentation
 
-### Parent Documentation
-- **[../../README.md](../../README.md)** - Projekt-Übersicht und User-Setup
-
-### Project Documentation
-- **[CLAUDE.md](../../CLAUDE.md)** - Projekt-Einstiegspunkt, Navigation Hub
-- **[.claude/context.md](../../.claude/context.md)** - Tech-Stack, aktueller Stand
-- **[.claude/instructions.md](../../.claude/instructions.md)** - Coding Standards
-
-### Related Guides
-- **[docs/how-to/LLM_SETUP.md](../../docs/how-to/LLM_SETUP.md)** - Vollständiger LLM Setup Guide
-- **[docs/reference/enrichment/MULTI_PROVIDER_LLM.md](../../docs/reference/enrichment/MULTI_PROVIDER_LLM.md)** - Multi-Provider Architecture
-- **[docs/explanation/decisions/ADR-019-llm-provider-strategy.md](../../docs/explanation/decisions/ADR-019-llm-provider-strategy.md)** - LLM Provider Strategy
-
-### Implementation
-- **[src/lib/llm/ollama-client.ts](../../src/lib/llm/ollama-client.ts)** - OllamaClient Implementation
-
-### External Resources
-- **[Ollama Modelfile Syntax](https://github.com/ollama/ollama/blob/main/docs/modelfile.md)** - Official Documentation
+- **[Haupt-README](../../README.md)** - Projekt-Übersicht
+- **[Scripts-Übersicht](../README.md)** - Alle Setup-Scripts
+- **[Ollama Modelfile Syntax](https://github.com/ollama/ollama/blob/main/docs/modelfile.md)** - Offizielle Dokumentation
 - **[Qwen 2.5 Benchmarks](https://qwenlm.github.io/blog/qwen2.5/)** - Model Performance
 
----
-
-**Version:** 1.0.0
-**Created:** 28. Januar 2026
-**Last Updated:** 28. Januar 2026
-**Status:** Production

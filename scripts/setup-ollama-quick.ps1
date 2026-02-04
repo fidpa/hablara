@@ -44,7 +44,7 @@ $ErrorActionPreference = 'Stop'
 
 # Error handler for unexpected failures
 trap {
-    Write-Host "[X] Setup failed unexpectedly: $_" -ForegroundColor Red
+    Write-Host "$([char]0x2717) Error: Setup failed unexpectedly: $_" -ForegroundColor Red
     exit 1
 }
 
@@ -57,24 +57,37 @@ $OllamaApiUrl = 'http://localhost:11434'
 $MinOllamaVersion = '0.3.0'  # qwen2.5 support added in 0.3.0
 
 # Logging functions
-function Write-LogInfo {
+function Write-Step {
     param([string]$Message)
-    Write-Host "[i] $Message" -ForegroundColor Blue
+    Write-Host "`n==> " -ForegroundColor Blue -NoNewline
+    Write-Host $Message -ForegroundColor Green
 }
 
-function Write-LogSuccess {
+function Write-Info {
     param([string]$Message)
-    Write-Host "[OK] $Message" -ForegroundColor Green
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x2022) -ForegroundColor Yellow -NoNewline
+    Write-Host " $Message"
 }
 
-function Write-LogWarning {
+function Write-Success {
     param([string]$Message)
-    Write-Host "[!] $Message" -ForegroundColor Yellow
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline
+    Write-Host " $Message"
 }
 
-function Write-LogError {
+function Write-Warn {
     param([string]$Message)
-    Write-Host "[X] $Message" -ForegroundColor Red
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x26A0) -ForegroundColor Yellow -NoNewline
+    Write-Host " $Message"
+}
+
+function Write-Err {
+    param([string]$Message)
+    Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline
+    Write-Host " Error: $Message" -ForegroundColor Red
 }
 
 # Check if command exists
@@ -130,8 +143,8 @@ function Test-OllamaVersion {
             $currentVersion = $Matches[1]
 
             if ((Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
-                Write-LogWarning "Ollama version $currentVersion is older than recommended $MinOllamaVersion"
-                Write-LogInfo "Consider updating: winget upgrade Ollama.Ollama"
+                Write-Warn "Ollama version $currentVersion is older than recommended $MinOllamaVersion"
+                Write-Info "Consider updating: winget upgrade Ollama.Ollama"
                 return $false
             }
             return $true
@@ -144,7 +157,7 @@ function Test-OllamaVersion {
 function Test-ModelInference {
     param([string]$Model)
 
-    Write-LogInfo "Testing model inference..."
+    Write-Info "Testing model inference..."
 
     try {
         $body = @{
@@ -159,11 +172,11 @@ function Test-ModelInference {
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
 
         if ($response.response) {
-            Write-LogSuccess "Model inference test passed"
+            Write-Success "Model inference test passed"
             return $true
         }
     } catch {
-        Write-LogWarning "Model inference test failed: $_"
+        Write-Warn "Model inference test failed: $_"
     }
 
     return $false
@@ -185,19 +198,19 @@ function Get-FreeDiskSpaceGB {
 function Wait-OllamaServer {
     param([int]$MaxAttempts = 30)
 
-    Write-LogInfo "Waiting for Ollama server..."
+    Write-Info "Waiting for Ollama server..."
 
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
         try {
             $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 2 -ErrorAction Stop
-            Write-LogSuccess "Ollama server is ready"
+            Write-Success "Ollama server is ready"
             return $true
         } catch {
             Start-Sleep -Seconds 1
         }
     }
 
-    Write-LogError "Ollama server not responding after $MaxAttempts seconds"
+    Write-Err "Ollama server not responding after $MaxAttempts seconds"
     return $false
 }
 
@@ -224,7 +237,7 @@ function Start-OllamaServer {
     # Check if already running via API (with longer timeout)
     try {
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
-        Write-LogSuccess "Ollama server already running (v$($response.version))"
+        Write-Success "Ollama server already running (v$($response.version))"
         return $true
     } catch {
         # API not responding, check if port is in use
@@ -232,14 +245,14 @@ function Start-OllamaServer {
 
     # Check if something is already using the port
     if (Test-PortInUse -Port 11434) {
-        Write-LogInfo "Port 11434 is in use, checking if Ollama is responding..."
+        Write-Info "Port 11434 is in use, checking if Ollama is responding..."
 
         # Give it more time - maybe server is still starting
         for ($i = 1; $i -le 10; $i++) {
             Start-Sleep -Seconds 1
             try {
                 $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 3 -ErrorAction Stop
-                Write-LogSuccess "Ollama server is running (v$($response.version))"
+                Write-Success "Ollama server is running (v$($response.version))"
                 return $true
             } catch {
                 # Keep waiting
@@ -247,15 +260,15 @@ function Start-OllamaServer {
         }
 
         # Port is in use but not responding as Ollama
-        Write-LogWarning "Port 11434 is in use but not responding as Ollama API"
-        Write-LogInfo "Another process may be using this port"
-        Write-LogInfo "Check with: netstat -ano | findstr :11434"
+        Write-Warn "Port 11434 is in use but not responding as Ollama API"
+        Write-Info "Another process may be using this port"
+        Write-Info "Check with: netstat -ano | findstr :11434"
         return $false
     }
 
     # Port is free, try starting as background process
     if (Test-CommandExists 'ollama') {
-        Write-LogInfo "Starting Ollama server..."
+        Write-Info "Starting Ollama server..."
         $process = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden -PassThru
 
         # Wait for server to be ready
@@ -265,7 +278,7 @@ function Start-OllamaServer {
         if ($serverReady -and -not $process.HasExited) {
             return $true
         } elseif ($process.HasExited) {
-            Write-LogError "Ollama process exited unexpectedly (Exit code: $($process.ExitCode))"
+            Write-Err "Ollama process exited unexpectedly (Exit code: $($process.ExitCode))"
             return $false
         }
 
@@ -277,40 +290,42 @@ function Start-OllamaServer {
 
 # Install Ollama
 function Install-Ollama {
+    Write-Step "Installing Ollama..."
+
     if (Test-CommandExists 'ollama') {
-        Write-LogSuccess "Ollama already installed"
+        Write-Success "Ollama already installed"
 
         # Show version and check minimum
         $version = & ollama --version 2>&1 | Select-Object -First 1
-        Write-LogInfo "Version: $version"
+        Write-Info "Version: $version"
         Test-OllamaVersion | Out-Null
 
         # Ensure server is running
         if (-not (Start-OllamaServer)) {
-            Write-LogError "Could not connect to Ollama server"
-            Write-LogInfo "If Ollama is installed as a Windows service, it may need to be restarted"
-            Write-LogInfo "Try: Restart-Service Ollama -ErrorAction SilentlyContinue"
-            Write-LogInfo "Or start manually: ollama serve"
+            Write-Err "Could not connect to Ollama server"
+            Write-Info "If Ollama is installed as a Windows service, it may need to be restarted"
+            Write-Info "Try: Restart-Service Ollama -ErrorAction SilentlyContinue"
+            Write-Info "Or start manually: ollama serve"
             exit 1
         }
 
         return
     }
 
-    Write-LogInfo "Installing Ollama..."
+    Write-Info "Installing Ollama..."
 
     # Try winget first
     if (Test-CommandExists 'winget') {
-        Write-LogInfo "Using winget for installation..."
+        Write-Info "Using winget for installation..."
 
         try {
             & winget install Ollama.Ollama --silent --accept-source-agreements --accept-package-agreements
 
             # Exit code 3010 = success but reboot required
             if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 3010) {
-                Write-LogSuccess "Ollama installed via winget"
+                Write-Success "Ollama installed via winget"
                 if ($LASTEXITCODE -eq 3010) {
-                    Write-LogWarning "A reboot may be required to complete installation"
+                    Write-Warn "A reboot may be required to complete installation"
                 }
 
                 # Refresh PATH
@@ -333,8 +348,8 @@ function Install-Ollama {
 
                     # Final check after manual PATH addition
                     if (-not (Test-CommandExists 'ollama')) {
-                        Write-LogWarning "Ollama installed but not found in PATH"
-                        Write-LogInfo "Please restart your terminal or add Ollama to PATH manually"
+                        Write-Warn "Ollama installed but not found in PATH"
+                        Write-Info "Please restart your terminal or add Ollama to PATH manually"
                     }
                 }
 
@@ -343,18 +358,18 @@ function Install-Ollama {
                 return
             }
         } catch {
-            Write-LogWarning "winget installation failed: $_"
+            Write-Warn "winget installation failed: $_"
         }
     }
 
     # Manual installation instructions
-    Write-LogWarning "Automatic installation not available"
+    Write-Warn "Automatic installation not available"
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "Please install Ollama manually:" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  1. Download from: https://ollama.ai/download"
+    Write-Host "  1. Download from: https://ollama.com/download"
     Write-Host "  2. Run the installer"
     Write-Host "  3. Run this script again"
     Write-Host ""
@@ -366,41 +381,43 @@ function Install-Ollama {
 
 # Pull base model
 function Install-BaseModel {
-    Write-LogInfo "Checking model: $ModelName"
+    Write-Step "Downloading base model..."
+    Write-Info "Checking model: $ModelName"
 
     # Check if model exists (escape regex special chars in model name)
     $models = & ollama list 2>$null
     $escapedModelName = [regex]::Escape($ModelName)
     if ($models -match "^$escapedModelName\s") {
-        Write-LogSuccess "Model already available: $ModelName"
+        Write-Success "Model already available: $ModelName"
         return
     }
 
-    Write-LogInfo "Downloading $ModelName (~4.7GB, takes 2-5min)..."
+    Write-Info "Downloading $ModelName (~4.7GB, takes 2-5min)..."
 
     & ollama pull $ModelName
     if ($LASTEXITCODE -ne 0) {
-        Write-LogError "Model download failed"
-        Write-LogInfo "Please try manually: ollama pull $ModelName"
+        Write-Err "Model download failed"
+        Write-Info "Please try manually: ollama pull $ModelName"
         exit 1
     }
 
-    Write-LogSuccess "Model downloaded: $ModelName"
+    Write-Success "Model downloaded: $ModelName"
 }
 
 # Create custom model
 function New-CustomModel {
-    Write-LogInfo "Checking custom model: $CustomModelName"
+    Write-Step "Creating custom model..."
+    Write-Info "Checking custom model: $CustomModelName"
 
     # Check if custom model exists (escape regex special chars in model name)
     $models = & ollama list 2>$null
     $escapedCustomModelName = [regex]::Escape($CustomModelName)
     if ($models -match "^$escapedCustomModelName\s") {
-        Write-LogSuccess "Custom model already available"
+        Write-Success "Custom model already available"
         return
     }
 
-    Write-LogInfo "Creating optimized custom model..."
+    Write-Info "Creating optimized custom model..."
 
     # Create temporary Modelfile (using $ModelName for consistency)
     $modelfileContent = @"
@@ -424,15 +441,15 @@ SYSTEM You are an expert in psychology, communication analysis, and logical reas
     try {
         & ollama create $CustomModelName -f $modelfilePath
         if ($LASTEXITCODE -ne 0) {
-            Write-LogWarning "Custom model creation failed"
-            Write-LogWarning "Continuing with base model"
+            Write-Warn "Custom model creation failed"
+            Write-Warn "Continuing with base model"
             return
         }
 
-        Write-LogSuccess "Custom model created: $CustomModelName"
-        Write-LogInfo "Accuracy boost: 80% -> 93% (Emotion Detection)"
+        Write-Success "Custom model created: $CustomModelName"
+        Write-Info "Accuracy boost: 80% -> 93% (Emotion Detection)"
     } catch {
-        Write-LogWarning "Unexpected error during model creation: $_"
+        Write-Warn "Unexpected error during model creation: $_"
         throw
     } finally {
         # Cleanup temp file (always executes, even on Ctrl+C)
@@ -445,11 +462,11 @@ SYSTEM You are an expert in psychology, communication analysis, and logical reas
 # Verify installation
 function Test-Installation {
     Write-Host ""
-    Write-LogInfo "Verifying installation..."
+    Write-Step "Verifying installation..."
 
     # Check Ollama binary
     if (-not (Test-CommandExists 'ollama')) {
-        Write-LogError "Ollama binary not found"
+        Write-Err "Ollama binary not found"
         return $false
     }
 
@@ -457,8 +474,8 @@ function Test-Installation {
     try {
         $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5
     } catch {
-        Write-LogError "Ollama server not reachable"
-        Write-LogInfo "Start manually: ollama serve"
+        Write-Err "Ollama server not reachable"
+        Write-Info "Start manually: ollama serve"
         return $false
     }
 
@@ -467,28 +484,28 @@ function Test-Installation {
     $escapedModelName = [regex]::Escape($ModelName)
     $escapedCustomModelName = [regex]::Escape($CustomModelName)
     if (-not ($models -match "^$escapedModelName\s")) {
-        Write-LogError "Base model not found: $ModelName"
+        Write-Err "Base model not found: $ModelName"
         return $false
     }
 
-    Write-LogSuccess "Base model available: $ModelName"
+    Write-Success "Base model available: $ModelName"
 
     # Check custom model (optional)
     if ($models -match "^$escapedCustomModelName\s") {
-        Write-LogSuccess "Custom model available: $CustomModelName"
+        Write-Success "Custom model available: $CustomModelName"
     } else {
-        Write-LogWarning "Custom model not available (using base model)"
+        Write-Warn "Custom model not available (using base model)"
     }
 
     # Test inference to verify model works
     $testModel = if ($models -match "^$escapedCustomModelName\s") { $CustomModelName } else { $ModelName }
     if (-not (Test-ModelInference -Model $testModel)) {
-        Write-LogWarning "Model loaded but inference test failed"
-        Write-LogInfo "The model may still work - try it in the app"
+        Write-Warn "Model loaded but inference test failed"
+        Write-Info "The model may still work - try it in the app"
     }
 
     Write-Host ""
-    Write-LogSuccess "Setup complete!"
+    Write-Success "Setup complete!"
 
     return $true
 }
@@ -496,14 +513,17 @@ function Test-Installation {
 # Pre-flight checks
 function Test-Prerequisites {
     Write-Host ""
-    Write-Host "Hablara Ollama Quick-Setup v$ScriptVersion" -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "  Hablara Ollama Quick-Setup v$ScriptVersion" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
+
+    Write-Step "Running pre-flight checks..."
 
     # Check platform
     if ($env:OS -ne 'Windows_NT') {
-        Write-LogError "This script is for Windows only"
-        Write-LogInfo "For macOS/Linux: ./scripts/setup-ollama-quick.sh"
+        Write-Err "This script is for Windows only"
+        Write-Info "For macOS/Linux: ./scripts/setup-ollama-quick.sh"
         exit 4
     }
 
@@ -511,30 +531,30 @@ function Test-Prerequisites {
     $freeSpace = Get-FreeDiskSpaceGB
 
     if ($freeSpace -lt $RequiredDiskSpaceGB) {
-        Write-LogError "Insufficient disk space"
-        Write-LogError "Required: ${RequiredDiskSpaceGB}GB, Available: ${freeSpace}GB"
+        Write-Err "Insufficient disk space"
+        Write-Err "Required: ${RequiredDiskSpaceGB}GB, Available: ${freeSpace}GB"
         exit 2
     }
 
-    Write-LogSuccess "Disk space: ${freeSpace}GB available"
+    Write-Success "Disk space: ${freeSpace}GB available"
 
     # Check network
     try {
-        $null = Invoke-WebRequest -Uri 'https://ollama.ai' -TimeoutSec 5 -UseBasicParsing
-        Write-LogSuccess "Network connection OK"
+        $null = Invoke-WebRequest -Uri 'https://ollama.com' -TimeoutSec 5 -UseBasicParsing
+        Write-Success "Network connection OK"
     } catch {
-        Write-LogError "No network connection to ollama.ai"
-        Write-LogInfo "Please check your internet connection"
+        Write-Err "No network connection to ollama.com"
+        Write-Info "Please check your internet connection"
         exit 3
     }
 
     # Check GPU availability
     $gpu = Test-GpuAvailable
     if ($gpu.Available) {
-        Write-LogSuccess "GPU detected: $($gpu.Type) (fast inference)"
+        Write-Success "GPU detected: $($gpu.Type) (fast inference)"
     } else {
-        Write-LogWarning "No GPU detected - using CPU (slower inference)"
-        Write-LogInfo "First inference may take 30-60 seconds"
+        Write-Warn "No GPU detected - using CPU (slower inference)"
+        Write-Info "First inference may take 30-60 seconds"
     }
 
     Write-Host ""
@@ -560,9 +580,9 @@ function Main {
     }
 
     # Success message
-    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next steps:" -ForegroundColor Green
+    Write-Host "Next Steps:" -ForegroundColor Blue
     Write-Host ""
     Write-Host "  1. Start Hablara.exe"
     Write-Host "  2. Press Ctrl+Shift+D for first recording"
@@ -573,7 +593,7 @@ function Main {
     Write-Host "  - Model: qwen2.5:7b-custom"
     Write-Host "  - Base URL: http://localhost:11434"
     Write-Host ""
-    Write-Host "Documentation: https://github.com/fidpa/hablara/blob/main/README.md" -ForegroundColor Blue
+    Write-Host "Documentation: https://github.com/fidpa/hablara/blob/main/README.md" -ForegroundColor Cyan
     Write-Host ""
 }
 

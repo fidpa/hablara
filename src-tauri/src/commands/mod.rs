@@ -20,6 +20,7 @@ mod mlx_llm;
 mod export;
 mod file_io;
 mod window;
+mod system;
 pub(crate) mod utils; // pub(crate) for sub-module access
 
 // Re-export all commands and types for frontend
@@ -32,3 +33,4 @@ pub use mlx_llm::*;
 pub use export::*;
 pub use file_io::*;
 pub use window::*;
+pub use system::*;

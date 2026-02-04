@@ -75,17 +75,29 @@ function Write-Step {
 
 function Write-Info {
     param([string]$Message)
-    Write-Host "    $Message" -ForegroundColor Yellow
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x2022) -ForegroundColor Yellow -NoNewline
+    Write-Host " $Message"
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "    [OK] $Message" -ForegroundColor Green
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x2713) -ForegroundColor Green -NoNewline
+    Write-Host " $Message"
 }
 
-function Write-ErrorMsg {
+function Write-Warn {
     param([string]$Message)
-    Write-Host "    [ERROR] $Message" -ForegroundColor Red
+    Write-Host "    " -NoNewline
+    Write-Host ([char]0x26A0) -ForegroundColor Yellow -NoNewline
+    Write-Host " $Message"
+}
+
+function Write-Err {
+    param([string]$Message)
+    Write-Host ([char]0x2717) -ForegroundColor Red -NoNewline
+    Write-Host " Error: $Message" -ForegroundColor Red
 }
 
 # Check if command exists
@@ -96,7 +108,7 @@ function Test-CommandExists {
 
 # Cleanup on error
 trap {
-    Write-ErrorMsg "Build failed - cleaning up partial artifacts"
+    Write-Err "Build failed - cleaning up partial artifacts"
     if (Test-Path (Join-Path $BuildDir 'build')) {
         Remove-Item -Recurse -Force (Join-Path $BuildDir 'build') -ErrorAction SilentlyContinue
     }
@@ -111,25 +123,25 @@ Write-Step "Checking dependencies..."
 
 # Check Git
 if (-not (Test-CommandExists 'git')) {
-    Write-ErrorMsg "Git is required but not installed."
+    Write-Err "Git is required but not installed."
     Write-Host "Install from: https://git-scm.com/download/win" -ForegroundColor Cyan
     exit 1
 }
-Write-Info "Git found"
+Write-Success "Git found"
 
 # Check CMake
 if (-not (Test-CommandExists 'cmake')) {
-    Write-ErrorMsg "CMake is required but not installed."
+    Write-Err "CMake is required but not installed."
     Write-Host "Install via: winget install Kitware.CMake" -ForegroundColor Cyan
     Write-Host "Or download from: https://cmake.org/download/" -ForegroundColor Cyan
     exit 1
 }
-Write-Info "CMake found"
+Write-Success "CMake found"
 
 # Check for Visual Studio / MSVC
 $vsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vsWhere)) {
-    Write-ErrorMsg "Visual Studio Build Tools not found."
+    Write-Err "Visual Studio Build Tools not found."
     Write-Host "Install from: https://visualstudio.microsoft.com/downloads/" -ForegroundColor Cyan
     Write-Host "Select 'Desktop development with C++' workload" -ForegroundColor Cyan
     exit 1
@@ -137,22 +149,22 @@ if (-not (Test-Path $vsWhere)) {
 
 $vsPath = & $vsWhere -latest -property installationPath 2>$null
 if (-not $vsPath) {
-    Write-ErrorMsg "No Visual Studio installation found."
+    Write-Err "No Visual Studio installation found."
     exit 1
 }
-Write-Info "Visual Studio found: $vsPath"
+Write-Success "Visual Studio found: $vsPath"
 
 # Check CUDA if requested
 if ($UseCuda) {
     if (-not (Test-CommandExists 'nvcc')) {
-        Write-ErrorMsg "CUDA toolkit not found (nvcc not in PATH)."
+        Write-Err "CUDA toolkit not found (nvcc not in PATH)."
         Write-Host "Install from: https://developer.nvidia.com/cuda-downloads" -ForegroundColor Cyan
         Write-Host "Or run without -UseCuda flag" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "NOTE: CUDA is optional. Whisper will work without GPU acceleration." -ForegroundColor Cyan
         exit 1
     }
-    Write-Info "CUDA toolkit found"
+    Write-Success "CUDA toolkit found"
 }
 
 Write-Success "All dependencies found"
@@ -182,7 +194,7 @@ if (Test-Path $BuildDir) {
     }
 } else {
     Write-Info "Cloning whisper.cpp..."
-    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git $BuildDir
+    git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git $BuildDir
 }
 
 # -----------------------------------------------------------------------------
@@ -209,7 +221,7 @@ try {
     Write-Info "Running cmake configure..."
     & cmake $cmakeArgs
     if ($LASTEXITCODE -ne 0) {
-        Write-ErrorMsg "CMake configure failed"
+        Write-Err "CMake configure failed"
         exit 2
     }
 
@@ -218,7 +230,7 @@ try {
     Write-Info "Building with $cpuCount parallel jobs..."
     & cmake --build build --config Release -j $cpuCount
     if ($LASTEXITCODE -ne 0) {
-        Write-ErrorMsg "Build failed"
+        Write-Err "Build failed"
         exit 2
     }
 
@@ -239,7 +251,7 @@ try {
     }
 
     if (-not $Script:WhisperBin) {
-        Write-ErrorMsg "Build failed - whisper binary not found"
+        Write-Err "Build failed - whisper binary not found"
         Write-Host "Searched in:" -ForegroundColor Yellow
         $possiblePaths | ForEach-Object { Write-Host "  $_" }
 
@@ -277,7 +289,7 @@ try {
     }
 
     if (Test-Path $modelFile) {
-        Write-Info "Model already downloaded"
+        Write-Success "Model already downloaded"
     } else {
         Write-Info "Downloading from Hugging Face..."
         # Use Invoke-WebRequest with progress (restore preference after)
@@ -286,7 +298,7 @@ try {
             $ProgressPreference = 'Continue'
             Invoke-WebRequest -Uri $modelUrl -OutFile $modelFile -UseBasicParsing
         } catch {
-            Write-ErrorMsg "Model download failed: $_"
+            Write-Err "Model download failed: $_"
             exit 3
         } finally {
             $ProgressPreference = $savedProgressPreference
@@ -339,11 +351,11 @@ try {
     if ($LASTEXITCODE -eq 0 -or $output -match 'usage') {
         Write-Success "Binary verification: OK"
     } else {
-        Write-ErrorMsg "Binary verification failed"
+        Write-Err "Binary verification failed"
         exit 2
     }
 } catch {
-    Write-ErrorMsg "Binary verification failed: $_"
+    Write-Err "Binary verification failed: $_"
     exit 2
 }
 
@@ -351,7 +363,7 @@ try {
 if (Test-Path $destModel) {
     Write-Success "Model verification: OK"
 } else {
-    Write-ErrorMsg "Model file not found"
+    Write-Err "Model file not found"
     exit 3
 }
 
@@ -361,7 +373,7 @@ if (Test-Path $destModel) {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "  Whisper Setup Complete!" -ForegroundColor Green
+Write-Host "  $([char]0x2713) Whisper Setup Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Installed components:"

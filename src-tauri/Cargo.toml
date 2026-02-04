@@ -69,6 +69,11 @@ tauri-plugin-macos-permissions = "2.3"
 # Phase E:
 # - DirectML bindings for GPU acceleration
 
+# Linux-specific Dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+# No additional crates needed - using std::env for XDG paths
+# Future: dbus for desktop notifications, pipewire bindings
+
 [profile.dev]
 incremental = true
 

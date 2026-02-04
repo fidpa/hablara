@@ -48,7 +48,6 @@
     ],
     "resources": [
       "resources/models/silero_vad_v4.onnx",
-      "resources/onnxruntime.dll",
       "binaries/whisper-*",
       "models/ggml-german-turbo.bin",
       "../public/models",
@@ -67,6 +66,21 @@
       "tsp": false,
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1",
+          "libasound2t64 | libasound2",
+          "libssl3"
+        ],
+        "desktopTemplate": "../hablara.desktop"
+      },
+      "appimage": {
+        "bundleMediaFramework": true
       }
     }
   },

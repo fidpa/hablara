@@ -17,6 +17,8 @@ import { ThemeToggleSection } from "../ThemeToggleSection";
 import { DeleteDataSection } from "../DeleteDataSection";
 import { Separator } from "@/components/ui/separator";
 import { isTauri } from "@/lib/utils";
+import { useSessionType } from "@/hooks/useSessionType";
+import { AlertTriangle } from "lucide-react";
 
 interface ErweitertTabProps {
   settings: AppSettings;
@@ -33,6 +35,10 @@ export function ErweitertTab({
 }: ErweitertTabProps): JSX.Element {
   const showMLXLLMPaths =
     settings.llm.provider === "ollama" && settings.llm.useMlx;
+
+  // Wayland detection for Linux (global hotkeys don't work on Wayland)
+  const { isWayland, isLinuxPlatform } = useSessionType();
+  const showWaylandWarning = isTauri() && isLinuxPlatform && isWayland;
 
   const handleSwitchToLocal = useCallback(() => {
     onSettingsChange({
@@ -67,6 +73,29 @@ export function ErweitertTab({
             <p className="text-xs text-muted-foreground">
               Der Hotkey funktioniert, solange Hablará geöffnet ist.
             </p>
+
+            {/* Wayland Warning (Linux only) */}
+            {showWaylandWarning && (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="mt-3 p-3 rounded-lg border border-yellow-500/50 bg-yellow-500/10"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
+                      Wayland-Session erkannt
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Globale Hotkeys funktionieren unter Wayland nicht.
+                      Verwende &quot;Ubuntu on Xorg&quot; beim Login oder nutze den
+                      manuellen Start-Button.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <Separator />
         </>

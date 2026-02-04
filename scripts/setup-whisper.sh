@@ -12,12 +12,20 @@
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 IFS=$'\n\t'        # Safe word splitting
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Colors for output (with fallback for non-TTY)
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    NC=''
+fi
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,7 +49,7 @@ for valid in "${valid_models[@]}"; do
 done
 
 if [[ "$model_valid" == false ]]; then
-    echo -e "${RED}Error: Invalid model '$MODEL'${NC}"
+    echo -e "${RED}✗ Error: Invalid model '$MODEL'${NC}"
     echo "Valid models: ${valid_models[*]}"
     exit 1
 fi
@@ -55,11 +63,19 @@ log_step() {
 }
 
 log_info() {
-    echo -e "    ${YELLOW}$1${NC}"
+    echo -e "    ${YELLOW}•${NC} $1"
+}
+
+log_success() {
+    echo -e "    ${GREEN}✓${NC} $1"
+}
+
+log_warn() {
+    echo -e "    ${YELLOW}⚠${NC} $1" >&2
 }
 
 log_error() {
-    echo -e "${RED}Error: $1${NC}"
+    echo -e "${RED}✗ Error: $1${NC}" >&2
 }
 
 # Cleanup function for error handling
@@ -108,7 +124,7 @@ if ! xcode-select -p &> /dev/null; then
     exit 1
 fi
 
-log_info "All dependencies found"
+log_success "All dependencies found"
 
 # Detect architecture
 ARCH=$(uname -m)
@@ -135,7 +151,7 @@ if [[ -d "$BUILD_DIR" ]]; then
     git pull --quiet
 else
     log_info "Cloning whisper.cpp..."
-    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git "$BUILD_DIR"
+    git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$BUILD_DIR"
     cd "$BUILD_DIR"
 fi
 
@@ -172,7 +188,7 @@ if [[ ! -f "$WHISPER_BIN" ]]; then
     fi
 fi
 
-log_info "Build successful: $WHISPER_BIN"
+log_success "Build successful: $WHISPER_BIN"
 
 # -----------------------------------------------------------------------------
 # Download Model
@@ -190,7 +206,7 @@ if [[ ! -f "$MODEL_FILE" ]]; then
 fi
 
 MODEL_SIZE=$(du -h "$MODEL_FILE" | cut -f1)
-log_info "Model downloaded: $MODEL_SIZE"
+log_success "Model downloaded: $MODEL_SIZE"
 
 # -----------------------------------------------------------------------------
 # Install to Tauri
@@ -206,11 +222,11 @@ mkdir -p "$MODELS_DIR"
 # Tauri expects: name-target_triple (e.g., whisper-aarch64-apple-darwin)
 cp "$WHISPER_BIN" "$BINARIES_DIR/$BINARY_NAME"
 chmod +x "$BINARIES_DIR/$BINARY_NAME"
-log_info "Binary installed: $BINARIES_DIR/$BINARY_NAME"
+log_success "Binary installed: $BINARIES_DIR/$BINARY_NAME"
 
 # Copy model
 cp "$MODEL_FILE" "$MODELS_DIR/"
-log_info "Model installed: $MODELS_DIR/ggml-${MODEL}.bin"
+log_success "Model installed: $MODELS_DIR/ggml-${MODEL}.bin"
 
 # -----------------------------------------------------------------------------
 # Verify Installation
@@ -220,7 +236,7 @@ log_step "Verifying installation..."
 
 # Test the binary
 if "$BINARIES_DIR/$BINARY_NAME" --help &>/dev/null; then
-    log_info "Binary verification: OK"
+    log_success "Binary verification: OK"
 else
     log_error "Binary verification failed"
     exit 1
@@ -228,7 +244,7 @@ fi
 
 # Check model file
 if [[ -f "$MODELS_DIR/ggml-${MODEL}.bin" ]]; then
-    log_info "Model verification: OK"
+    log_success "Model verification: OK"
 else
     log_error "Model file not found"
     exit 1
@@ -240,7 +256,7 @@ fi
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  Whisper Setup Complete!${NC}"
+echo -e "${GREEN}  ✓ Whisper Setup Complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 echo "Installed components:"

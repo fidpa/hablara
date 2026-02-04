@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Hablará - Ollama Quick-Setup Script
+# Hablará - Ollama Quick-Setup Script for Linux
 #
 # Purpose: One-liner installation of Ollama + optimized model for Hablará
-# Platform: macOS (ARM64/x86_64)
-# Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+# Platform: Linux (Ubuntu 24.04 LTS, Debian 12+, Fedora, Arch)
+# Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash
 #
 # Exit codes:
 #   0 - Success
@@ -20,7 +20,7 @@ IFS=$'\n\t'        # Safer word splitting
 # Configuration
 # ============================================================================
 
-readonly SCRIPT_VERSION="1.1.0"
+readonly SCRIPT_VERSION="1.0.0"
 readonly REQUIRED_DISK_SPACE_GB=10
 readonly MODEL_NAME="qwen2.5:7b"
 readonly CUSTOM_MODEL_NAME="qwen2.5:7b-custom"
@@ -75,7 +75,7 @@ command_exists() {
   command -v "$1" &> /dev/null
 }
 
-# Escape string for safe JSON embedding (handles \, ", and control chars)
+# Escape string for safe JSON embedding
 json_escape_string() {
   local str="$1"
   # Order matters: escape backslashes first, then other characters
@@ -90,15 +90,32 @@ json_escape_string() {
 # Get available disk space in GB
 get_free_space_gb() {
   local free_space
-  local check_path="${HOME}/.ollama"
+  local check_path
+
+  # Check Ollama model storage location (XDG compliant)
+  # XDG spec requires absolute path
+  if [[ -n "${XDG_DATA_HOME:-}" ]] && [[ "${XDG_DATA_HOME}" == /* ]]; then
+    check_path="${XDG_DATA_HOME}/ollama"
+  else
+    check_path="${HOME}/.local/share/ollama"
+  fi
 
   # Create directory if not exists (for df check)
   mkdir -p "${check_path}" 2>/dev/null || check_path="${HOME}"
 
   if command_exists df; then
-    # macOS: df -g (gigabytes) - check Ollama model storage location
-    free_space=$(df -g "${check_path}" 2>/dev/null | tail -1 | awk '{print $4}')
-    echo "${free_space:-0}"
+    # Linux: df -BG (gigabytes with 'G' suffix)
+    free_space=$(df -BG "${check_path}" 2>/dev/null | tail -1 | awk '{print $4}')
+    # Strip 'G' suffix
+    free_space="${free_space%G}"
+
+    # Validate numeric
+    if ! [[ "$free_space" =~ ^[0-9]+$ ]]; then
+      echo "0"
+      return
+    fi
+
+    echo "$free_space"
   else
     echo "0"
   fi
@@ -109,21 +126,15 @@ version_gte() {
   local v1="${1:-0.0.0}"
   local v2="${2:-0.0.0}"
 
-  # Try sort -V first (GNU coreutils), fallback to manual comparison
-  if command_exists gsort; then
-    # macOS with Homebrew coreutils
-    if [[ "$(printf '%s\n%s' "$v2" "$v1" | gsort -V | head -n1)" == "$v2" ]]; then
-      return 0
-    fi
-    return 1
-  elif sort --version 2>/dev/null | grep -q "GNU"; then
+  # GNU sort -V is standard on Linux
+  if sort --version 2>/dev/null | grep -q "GNU"; then
     # GNU sort available
     if [[ "$(printf '%s\n%s' "$v2" "$v1" | sort -V | head -n1)" == "$v2" ]]; then
       return 0
     fi
     return 1
   else
-    # Manual version comparison fallback (IFS in subshell to avoid side effects)
+    # Manual version comparison fallback
     local -a v1_parts v2_parts
     IFS='.' read -ra v1_parts <<< "$v1"
     IFS='.' read -ra v2_parts <<< "$v2"
@@ -163,7 +174,7 @@ check_ollama_version() {
 
     if ! version_gte "$current_version" "$MIN_OLLAMA_VERSION"; then
       log_warn "Ollama Version $current_version ist älter als empfohlen ($MIN_OLLAMA_VERSION)"
-      log_info "Update empfohlen: brew upgrade ollama"
+      log_info "Update empfohlen: sudo systemctl restart ollama oder curl -fsSL https://ollama.com/install.sh | sh"
       return 1
     fi
   fi
@@ -172,25 +183,40 @@ check_ollama_version() {
 
 # Check for GPU/accelerator availability
 check_gpu_available() {
-  # macOS: Check for Apple Silicon (Metal acceleration)
-  if [[ "$(uname)" == "Darwin" ]]; then
-    local cpu_brand
-    cpu_brand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "")
-
-    if [[ "$cpu_brand" == *"Apple"* ]]; then
-      echo "apple_silicon"
-      return 0
-    fi
-  fi
-
-  # Check for NVIDIA GPU
+  # Check for NVIDIA GPU (CUDA)
   if command_exists nvidia-smi; then
     if nvidia-smi &>/dev/null; then
-      echo "nvidia"
+      # Get GPU name
+      local gpu_name
+      gpu_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+      if [[ -n "$gpu_name" ]]; then
+        echo "nvidia:${gpu_name}"
+      else
+        echo "nvidia"
+      fi
       return 0
     fi
   fi
 
+  # Check for AMD GPU (ROCm)
+  if command_exists rocm-smi; then
+    if rocm-smi &>/dev/null; then
+      echo "amd_rocm"
+      return 0
+    fi
+  fi
+
+  # Check for Intel GPU (oneAPI)
+  if [[ -d /opt/intel/oneapi ]]; then
+    if command_exists sycl-ls; then
+      if sycl-ls 2>/dev/null | grep -iq "gpu"; then
+        echo "intel_oneapi"
+        return 0
+      fi
+    fi
+  fi
+
+  # CPU fallback
   echo "cpu"
   return 1
 }
@@ -201,7 +227,7 @@ test_model_inference() {
 
   log_info "Teste Model-Inference..."
 
-  # Properly escape model name for JSON (handles \, ", and control chars)
+  # Properly escape model name for JSON
   local escaped_model
   escaped_model=$(json_escape_string "$model")
 
@@ -258,18 +284,30 @@ trap cleanup EXIT
 preflight_checks() {
   echo ""
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
-  echo -e "${COLOR_GREEN}  Hablará Ollama Quick-Setup v${SCRIPT_VERSION}${COLOR_RESET}"
+  echo -e "${COLOR_GREEN}  Hablará Ollama Quick-Setup v${SCRIPT_VERSION} (Linux)${COLOR_RESET}"
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
   echo ""
 
   log_step "Running pre-flight checks..."
 
   # Check platform
-  if [[ "$(uname)" != "Darwin" ]]; then
-    log_error "Dieses Script ist nur für macOS"
-    log_info "Für Linux/Windows: siehe https://ollama.com/download"
+  if [[ "$(uname)" != "Linux" ]]; then
+    log_error "Dieses Script ist nur für Linux"
+    log_info "Für macOS: siehe scripts/setup-ollama-quick.sh"
+    log_info "Für Windows: siehe https://ollama.com/download"
     exit 4
   fi
+
+  # Detect distribution
+  local distro="unknown"
+  if [[ -f /etc/os-release ]]; then
+    # Parse instead of sourcing for security
+    distro=$(grep -E "^PRETTY_NAME=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"')
+    if [[ -z "$distro" ]]; then
+      distro=$(grep -E "^ID=" /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "unknown")
+    fi
+  fi
+  log_info "Distribution: ${distro}"
 
   # Check disk space
   local free_space
@@ -293,19 +331,23 @@ preflight_checks() {
   log_success "Netzwerkverbindung OK"
 
   # Check GPU/accelerator availability
-  local gpu_type
-  gpu_type=$(check_gpu_available)
+  local gpu_info
+  gpu_info=$(check_gpu_available)
 
-  case "$gpu_type" in
-    apple_silicon)
-      log_success "Apple Silicon erkannt (Metal-Beschleunigung)"
+  case "$gpu_info" in
+    nvidia:*)
+      local gpu_name="${gpu_info#nvidia:}"
+      log_success "NVIDIA GPU erkannt: ${gpu_name} (CUDA-Beschleunigung)"
       ;;
-    nvidia)
-      log_success "NVIDIA GPU erkannt (CUDA-Beschleunigung)"
+    amd_rocm)
+      log_success "AMD GPU erkannt (ROCm-Beschleunigung, experimentell)"
       ;;
-    *)
+    intel_oneapi)
+      log_success "Intel GPU erkannt (oneAPI-Beschleunigung, experimentell)"
+      ;;
+    cpu)
       log_warn "Keine GPU erkannt - CPU-Inferenz (langsamer)"
-      log_info "Erste Inferenz kann 30-60 Sekunden dauern"
+      log_info "Erste Inferenz kann 60-120 Sekunden dauern"
       ;;
   esac
 
@@ -319,7 +361,12 @@ preflight_checks() {
 # Check if port is in use
 port_in_use() {
   local port="${1:-11434}"
-  if command_exists lsof; then
+
+  # Try multiple methods in priority order
+  if command_exists ss; then
+    # ss is modern replacement for netstat
+    ss -tlnp 2>/dev/null | grep -q ":${port}"
+  elif command_exists lsof; then
     lsof -i ":${port}" &>/dev/null
   elif command_exists nc; then
     nc -z 127.0.0.1 "${port}" &>/dev/null
@@ -328,12 +375,11 @@ port_in_use() {
     (echo >/dev/tcp/127.0.0.1/"${port}") 2>/dev/null
   else
     # No port checking tool available - assume port is free
-    # This is safer than a broken check (false positives are worse than false negatives here)
     return 1
   fi
 }
 
-# Start Ollama server (handles both app and CLI installations)
+# Start Ollama server (handles systemd and nohup fallback)
 start_ollama_server() {
   # First check if server is already responding
   if curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
@@ -355,27 +401,32 @@ start_ollama_server() {
     done
 
     log_warn "Port 11434 belegt, aber Ollama API antwortet nicht"
-    log_info "Prüfen mit: lsof -i :11434"
+    log_info "Prüfen mit: ss -tlnp | grep 11434"
     return 1
   fi
 
   # Port is free, try to start server
 
-  # Try launchd first (Ollama.app installation)
-  if [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]]; then
-    launchctl load ~/Library/LaunchAgents/com.ollama.ollama.plist 2>/dev/null || true
-    return 0
+  # Try systemd user service first (preferred)
+  if command_exists systemctl; then
+    if systemctl --user list-unit-files ollama.service &>/dev/null; then
+      log_info "Starte Ollama via systemd..."
+      systemctl --user start ollama 2>/dev/null || true
+      sleep 2
+      if curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
+        log_success "Ollama Server gestartet (systemd)"
+        return 0
+      fi
+    fi
   fi
 
-  # Try opening Ollama.app (if installed in Applications)
-  if [[ -d "/Applications/Ollama.app" ]]; then
-    open -a Ollama 2>/dev/null || true
-    return 0
-  fi
-
-  # Fallback: start ollama serve in background
+  # Fallback: start ollama serve in background with nohup
   if command_exists ollama; then
-    nohup ollama serve &>/dev/null &
+    log_info "Starte Ollama Server (nohup)..."
+    # Use XDG runtime dir or user-specific temp location
+    local log_dir="${XDG_RUNTIME_DIR:-/tmp}"
+    local log_file="${log_dir}/ollama-server-${UID}.log"
+    nohup ollama serve &>"$log_file" &
     local ollama_pid=$!
 
     # Brief wait to check if process started successfully
@@ -383,9 +434,11 @@ start_ollama_server() {
 
     # Verify process is still running
     if kill -0 "$ollama_pid" 2>/dev/null; then
+      log_success "Ollama Server gestartet (PID: ${ollama_pid})"
       return 0
     else
       log_warn "Ollama process failed to start or exited immediately"
+      log_info "Check logs: ${log_file}"
       return 1
     fi
   fi
@@ -413,7 +466,7 @@ install_ollama() {
 
       if ! start_ollama_server; then
         log_error "Konnte Ollama Server nicht starten"
-        log_info "Falls ein anderer Prozess Port 11434 nutzt: lsof -i :11434"
+        log_info "Falls ein anderer Prozess Port 11434 nutzt: ss -tlnp | grep 11434"
         log_info "Sonst manuell starten: ollama serve"
         exit 1
       fi
@@ -422,6 +475,7 @@ install_ollama() {
       if ! wait_for_ollama; then
         log_error "Ollama Server antwortet nicht"
         log_info "Bitte manuell starten: ollama serve"
+        log_info "Oder systemd nutzen: systemctl --user start ollama"
         exit 1
       fi
     else
@@ -433,38 +487,21 @@ install_ollama() {
 
   log_info "Installiere Ollama..."
 
-  # macOS: Use Homebrew if available, otherwise guide to manual installation
-  if command_exists brew; then
-    log_info "Verwende Homebrew für Installation..."
+  # Use official install script
+  log_info "Verwende offizielles Ollama Install-Script..."
 
-    if ! brew install ollama; then
-      log_error "Homebrew Installation fehlgeschlagen"
-      log_info "Alternative: Lade Ollama.app von https://ollama.com/download"
-      exit 1
-    fi
-
-    log_success "Ollama via Homebrew installiert"
-
-    # Start server
-    start_ollama_server
-
-  else
-    # No Homebrew - guide to manual installation
-    log_warn "Homebrew nicht gefunden"
-    echo ""
-    echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
-    echo ""
-    echo "Bitte Ollama manuell installieren:"
-    echo ""
-    echo "   Option 1 (empfohlen): Homebrew installieren, dann dieses Script erneut ausführen"
-    echo "      /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
-    echo ""
-    echo "   Option 2: Ollama.app herunterladen"
-    echo "      https://ollama.com/download"
-    echo ""
-    echo "Nach der Installation dieses Script erneut ausführen."
-    echo ""
+  if ! curl -fsSL "${OLLAMA_INSTALL_URL}" | sh; then
+    log_error "Ollama Installation fehlgeschlagen"
+    log_info "Manuelle Installation: https://ollama.com/download"
     exit 1
+  fi
+
+  log_success "Ollama installiert"
+
+  # Start server
+  if ! start_ollama_server; then
+    log_warn "Server-Start fehlgeschlagen"
+    log_info "Starte manuell: ollama serve"
   fi
 
   # Wait for server to start
@@ -515,15 +552,27 @@ create_custom_model() {
 
   log_info "Erstelle optimiertes Custom-Modell..."
 
-  # Create temporary Modelfile with unique name and restrictive permissions
+  # Try to find external Modelfile first
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+
+  local external_modelfile=""
+  if [[ -n "$script_dir" && -f "${script_dir}/ollama/qwen2.5-7b-custom.modelfile" ]]; then
+    external_modelfile="${script_dir}/ollama/qwen2.5-7b-custom.modelfile"
+    log_info "Verwende Modelfile: ${external_modelfile}"
+  fi
+
+  # Create temporary Modelfile with restrictive permissions
   local modelfile
   modelfile=$(mktemp -t hablara-modelfile.XXXXXX)
   chmod 600 "$modelfile"
 
-  # Note: We rely on manual cleanup below instead of trap to avoid
-  # clobbering the global cleanup handler set at script start
-  # Use MODEL_NAME variable for consistency (unquoted heredoc to allow expansion)
-  cat > "${modelfile}" <<EOF
+  if [[ -n "$external_modelfile" ]]; then
+    # Use external Modelfile
+    cp "$external_modelfile" "$modelfile"
+  else
+    # Use inline Modelfile (fallback)
+    cat > "${modelfile}" <<EOF
 FROM ${MODEL_NAME}
 
 # Optimized parameters for Hablará emotion/fallacy detection
@@ -534,6 +583,7 @@ PARAMETER repeat_penalty 1.1
 # System message for Hablará
 SYSTEM You are an expert in psychology, communication analysis, and logical reasoning. Analyze text for emotions, cognitive biases, and logical fallacies with high accuracy.
 EOF
+  fi
 
   # Create custom model (capture exit code)
   local create_result=0
@@ -569,7 +619,7 @@ verify_installation() {
   # Check server API
   if ! curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null; then
     log_error "Ollama Server nicht erreichbar"
-    log_info "Starte manuell: 'ollama serve'"
+    log_info "Starte manuell: 'ollama serve' oder 'systemctl --user start ollama'"
     return 1
   fi
 
@@ -642,6 +692,12 @@ main() {
   echo "   - Provider: Ollama (Standard)"
   echo "   - Modell: qwen2.5:7b-custom"
   echo "   - Base URL: http://localhost:11434"
+  echo ""
+  echo "Systemd Service Management:"
+  echo "   - Status: systemctl --user status ollama"
+  echo "   - Start:  systemctl --user start ollama"
+  echo "   - Stop:   systemctl --user stop ollama"
+  echo "   - Enable: systemctl --user enable ollama  (Autostart)"
   echo ""
   echo -e "${COLOR_CYAN}Documentation: https://github.com/fidpa/hablara/blob/main/README.md${COLOR_RESET}"
   echo ""
