@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/fidpa/hablara/releases)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://www.apple.com/macos)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/fidpa/hablara/releases)
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
 Desktop-App für Selbstreflexion mit Spracherkennung und KI-gestützter Sprachanalyse.
@@ -15,9 +15,20 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 ![Hablará Welcome Screen](public/pictures/welcome-screen.png)
 
+## Inhalt
+
+- [Plattformen](#plattformen)
+- [Installation](#installation)
+- [Funktionen](#funktionen)
+- [Architektur](#architektur)
+- [Datenschutzkonzept](#datenschutzkonzept)
+- [Vergleich](#vergleich)
+- [Mitwirken](#mitwirken)
+- [Lizenz](#lizenz)
+
 ---
 
-## Plattform-Unterstützung
+## Plattformen
 
 | Plattform | Status | Architektur | Hinweise |
 |----------|--------|--------------|-------|
@@ -123,191 +134,6 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scr
 Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 
 </details>
-
----
-
-## Im Vergleich
-
-| Funktion | Hablará | Otter.ai | Fireflies.ai | Whisper (plain) |
-|---------|---------|----------|--------------|-----------------|
-| **Datenschutz (Offline)** | Ja (100%) | Nein | Nein | Ja |
-| **Emotions-Erkennung** | Ja (12 Features) | Nein | Ja (3-Tier Sentiment)* | Nein |
-| **Fehlschluss-Erkennung** | Ja (16 Typen) | Nein | Nein | Nein |
-| **Selbstreflexion** | Ja | Nein | Nein | Nein |
-| **Psychol. Frameworks** | Ja (7) | Nein | Nein | Nein |
-| **Meeting-Features** | Nein | Ja | Ja | Nein |
-| **Preis** | Open-Source | $16.99/mo | $10/mo (annual)* | Kostenlos |
-
-\*Fireflies bietet Sentiment-Analyse (positiv/negativ/neutral) ab Business-Plan — keine granulare Emotion-Detection wie Hablará (10 Emotionstypen, Dual-Track Audio+Text).
-\*Fireflies Pro: $18/mo (monthly) / $10/mo (annual). Otter.ai Pro: $16.99/mo (monthly) / $8.33/mo (annual).
-
----
-
-## System-Architektur
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Hablará Desktop App                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Frontend (Next.js 14 + React 18)                         │  │
-│  │  • UI Components (Audio Recorder, Emotion Indicator)      │  │
-│  │  • State Management (React Hooks)                         │  │
-│  │  • Hotkey Listener (Ctrl+Shift+D)                         │  │
-│  │  • RAG (ONNX 118 MB + SQLite FTS5)                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                           │ IPC (Tauri Commands)                │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  Rust Backend (Tauri 2.0)                                 │  │
-│  │  • Native Audio (cpal @ 16kHz)                            │  │
-│  │  • Silero VAD (ONNX, 1.8 MB)                              │  │
-│  │  • Audio Analysis (12 Features)                           │  │
-│  │  • Storage Manager (JSON Dateien)                         │  │
-│  │  • whisper.cpp Integration (Sidecar)                      │  │
-│  │  • API Key Security (Keychain / Credential Manager)       │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Verarbeitungs-Pipeline
-
-```
-Aufnahme → VAD → whisper.cpp → LLM-Analyse → Speicherung → UI
-   │        │         │             │             │          │
-   ▼        ▼         ▼             ▼             ▼          ▼
-Hotkey   Silero    Transkription  Dual-Track   Auto-Save   Ergebnis
-(Ctrl+   filtert   (lokal)        Emotion +    (lokal)     anzeigen
-Shift+D) Stille                   Fehlschluss
-                                  (parallel)
-```
-
-### KI-Modelle
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│   Audio-Pipeline                     RAG-Wissensassistent       │
-│                                                                 │
-│   Audio-Eingang                      User-Frage                 │
-│        │                                  │                     │
-│        ▼                                  ▼                     │
-│   ┌────────────────────┐            ┌────────────────────┐      │
-│   │ Silero VAD (1.8 MB)│            │ Embedding (118 MB) │      │
-│   │ filtert Stille     │            │ Semantische Suche  │      │
-│   └────────────────────┘            └────────────────────┘      │
-│        │                                  │                     │
-│        ▼                                  ▼                     │
-│   ┌────────────────────┐            ┌────────────────────┐      │
-│   │ whisper.cpp (1.6GB)│            │ SQLite FTS5        │      │
-│   │ Speech-to-Text     │            │ 78 Wissens-Chunks  │      │
-│   └────────────────────┘            └────────────────────┘      │
-│        │                                  │                     │
-│        └───────────────┬──────────────────┘                     │
-│                        ▼                                        │
-│   ┌──────────────────────────────────────────────────────────┐  │
-│   │ LLMs (Multi-Provider, frei wählbar via Settings)         │  │
-│   │ • Ollama (lokal, 2-4s, gratis, Datenschutz)              │  │
-│   │ • OpenAI (Cloud, 0.5-2s, günstig, Geschwindigkeit)       │  │
-│   │ • Anthropic (Cloud, 0.5-2s, teurer, Qualität)            │  │
-│   └──────────────────────────────────────────────────────────┘  │
-│        │                                  │                     │
-│        ▼                                  ▼                     │
-│   7 Analysen                         Chat-Antwort               │
-│   (Emotion, GFK, etc.)               (kontextbasiert)           │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Tech-Stack (3-Tier Architektur)
-
-| Layer | Technologie | Zweck |
-|-------|-------------|-------|
-| **Frontend** | Next.js 14, React 18, TailwindCSS | UI, State Management |
-| **Desktop** | Tauri 2.0, Rust 1.70+ | Native Audio, IPC, Storage |
-| **AI/ML** | whisper.cpp (german-turbo), Ollama (qwen2.5:7b) | STT, LLM Enrichment |
-| **VAD** | Silero VAD v4 (ONNX, 1.8 MB) | Voice Activity Detection |
-| **Embedding** | paraphrase-multilingual-MiniLM-L12-v2 (ONNX INT8, 118 MB) | RAG Semantic Search |
-| **Security** | tauri-plugin-keyring | API Key Verschlüsselung |
-
----
-
-## Datenschutzkonzept
-
-**100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Datenkontrolle.
-
-Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschutz/)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   100% Lokale Option                    │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │   Audio     │───▶│ whisper.cpp │───▶│   Ollama    │  │
-│  │   (cpal)    │    │   (lokal)   │    │   (lokal)   │  │
-│  └─────────────┘    └─────────────┘    └─────────────┘  │
-│        │                                      │         │
-│        ▼                                      ▼         │
-│  ┌─────────────┐                       ┌─────────────┐  │
-│  │  Speicher   │◀──────────────────────│  Analyse    │  │
-│  │ ~/Hablara/  │                       │  Ergebnis   │  │
-│  └─────────────┘                       └─────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-
-### DSGVO-Compliance
-
-| Aspekt | Details |
-|--------|---------|
-| **Rechtliche Basis** | DSGVO Art. 6(1)(a) – Einwilligung |
-| **Datenklassifizierung** | Nicht-sensible personenbezogene Daten |
-| **Zweckbindung** | Audio ausschließlich für Transkription & Sprachanalyse |
-| **Speicherort** | `~/Hablara/recordings/` (macOS/Linux) bzw. `%USERPROFILE%\Hablara\recordings\` (Windows) |
-| **Cloud-Option** | Nur mit expliziter Einwilligung (OpenAI/Anthropic) |
-| **Auto-Cleanup** | Konfigurierbar (Standard: 25-500 Aufnahmen) |
-
-### Technische Maßnahmen
-
-| Maßnahme | Implementierung |
-|----------|-----------------|
-| **API Key Verschlüsselung** | macOS Keychain (AES-256-GCM) / Windows Credential Manager (DPAPI) |
-| **Keine Cloud-Pflicht** | whisper.cpp + Ollama vollständig offline |
-| **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
-| **Open-Source** | Transparenz durch offenen Code |
-
-### Sicherheitsarchitektur
-
-```
-┌───────────────────────────────────────────────────────────┐
-│                   Sicherheitsarchitektur                  │
-├───────────────────────────────────────────────────────────┤
-│                                                           │
-│  Input:   ┌────────────┐  ┌────────┐  ┌────────────┐      │
-│           │ User Input │─▶│  Zod   │─▶│ XSS-Filter │      │
-│           └────────────┘  └────────┘  └────────────┘      │
-│                                                           │
-│  Output:  ┌────────────┐  ┌──────────────┐                │
-│           │ LLM Output │─▶│ SafetyFilter │─▶ Display      │
-│           └────────────┘  └──────────────┘                │
-│                                                           │
-│  Storage: ┌─────────────────────────────────────────┐     │
-│           │ Lokal: ~/Hablara/ (%USERPROFILE% Win)   │     │
-│           │ API Keys: Keychain / Credential Manager │     │
-│           └─────────────────────────────────────────┘     │
-│                                                           │
-└───────────────────────────────────────────────────────────┘
-```
-
-- **Keine Cloud-Datenbank** – Keine Remote-Angriffsfläche, alle Daten lokal
-- **Verschlüsselte Credentials** – API Keys nur in Keychain / Credential Manager, niemals Klartext
-- **Input Validation** – Alle User-Eingaben via Zod Schema validiert
-- **XSS Protection** – LLM-Output wird vor Rendering sanitized
-- **Safety Filter** – Blockiert problematische LLM-Outputs
-- **App Sandbox** – macOS Hardened Runtime / Windows Security Features begrenzen Systemzugriff
-
-### Abgrenzung zu Gesundheits-Apps
-
-Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
-
-- **Art. 6 (Einwilligung):** Emotion-Tracking = Self-Awareness, keine klinische Diagnostik
-- **Abgrenzung:** Anders als MindDoc (klinisch, Art. 9) oder Daylio (nur Mood-Logging)
-
-**Wichtiger Hinweis:** Bei Verwendung von Cloud-Anbietern (OpenAI, Anthropic) gelten deren Datenschutzbestimmungen.
 
 ---
 
@@ -450,7 +276,7 @@ Jetzt weiß ich, wie ich das angehen will."
 <details>
 <summary><b>Design-Entscheidungen</b> – Warum Tauri, Native Audio, Ollama?</summary>
 
-*Architektur-Diagramm: Siehe [System-Architektur](#system-architektur) oben.*
+*Architektur-Diagramm: Siehe [Architektur](#architektur) unten.*
 
 #### Architektur
 
@@ -527,7 +353,7 @@ Jetzt weiß ich, wie ich das angehen will."
 </details>
 
 <details>
-<summary><b>Developer Setup</b> – Voraussetzungen, Installation, Build</summary>
+<summary><b>Entwicklungsumgebung</b> – Voraussetzungen, Installation, Build</summary>
 
 ### Voraussetzungen
 
@@ -697,4 +523,204 @@ Hablará unterstützt drei LLM-Anbieter:
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.3 | **Stand:** 04. Februar 2026
+## Architektur
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Hablará Desktop App                          │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Frontend (Next.js 14 + React 18)                         │  │
+│  │  • UI Components (Audio Recorder, Emotion Indicator)      │  │
+│  │  • State Management (React Hooks)                         │  │
+│  │  • Hotkey Listener (Ctrl+Shift+D)                         │  │
+│  │  • RAG (ONNX 118 MB + SQLite FTS5)                        │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                           │ IPC (Tauri Commands)                │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Rust Backend (Tauri 2.0)                                 │  │
+│  │  • Native Audio (cpal @ 16kHz)                            │  │
+│  │  • Silero VAD (ONNX, 1.8 MB)                              │  │
+│  │  • Audio Analysis (12 Features)                           │  │
+│  │  • Storage Manager (JSON Dateien)                         │  │
+│  │  • whisper.cpp Integration (Sidecar)                      │  │
+│  │  • API Key Security (Keychain / Credential Manager)       │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Verarbeitungs-Pipeline
+
+```
+Aufnahme → VAD → whisper.cpp → LLM-Analyse → Speicherung → UI
+   │        │         │             │             │          │
+   ▼        ▼         ▼             ▼             ▼          ▼
+Hotkey   Silero    Transkription  Dual-Track   Auto-Save   Ergebnis
+(Ctrl+   filtert   (lokal)        Emotion +    (lokal)     anzeigen
+Shift+D) Stille                   Fehlschluss
+                                  (parallel)
+```
+
+### KI-Modelle
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│   Audio-Pipeline                     RAG-Wissensassistent       │
+│                                                                 │
+│   Audio-Eingang                      User-Frage                 │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   ┌────────────────────┐            ┌────────────────────┐      │
+│   │ Silero VAD (1.8 MB)│            │ Embedding (118 MB) │      │
+│   │ filtert Stille     │            │ Semantische Suche  │      │
+│   └────────────────────┘            └────────────────────┘      │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   ┌────────────────────┐            ┌────────────────────┐      │
+│   │ whisper.cpp (1.6GB)│            │ SQLite FTS5        │      │
+│   │ Speech-to-Text     │            │ 78 Wissens-Chunks  │      │
+│   └────────────────────┘            └────────────────────┘      │
+│        │                                  │                     │
+│        └───────────────┬──────────────────┘                     │
+│                        ▼                                        │
+│   ┌──────────────────────────────────────────────────────────┐  │
+│   │ LLMs (Multi-Provider, frei wählbar via Settings)         │  │
+│   │ • Ollama (lokal, 2-4s, gratis, Datenschutz)              │  │
+│   │ • OpenAI (Cloud, 0.5-2s, günstig, Geschwindigkeit)       │  │
+│   │ • Anthropic (Cloud, 0.5-2s, teurer, Qualität)            │  │
+│   └──────────────────────────────────────────────────────────┘  │
+│        │                                  │                     │
+│        ▼                                  ▼                     │
+│   7 Analysen                         Chat-Antwort               │
+│   (Emotion, GFK, etc.)               (kontextbasiert)           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Tech-Stack (3-Tier Architektur)
+
+| Layer | Technologie | Zweck |
+|-------|-------------|-------|
+| **Frontend** | Next.js 14, React 18, TailwindCSS | UI, State Management |
+| **Desktop** | Tauri 2.0, Rust 1.70+ | Native Audio, IPC, Storage |
+| **AI/ML** | whisper.cpp (german-turbo), Ollama (qwen2.5:7b) | STT, LLM Enrichment |
+| **VAD** | Silero VAD v4 (ONNX, 1.8 MB) | Voice Activity Detection |
+| **Embedding** | paraphrase-multilingual-MiniLM-L12-v2 (ONNX INT8, 118 MB) | RAG Semantic Search |
+| **Security** | tauri-plugin-keyring | API Key Verschlüsselung |
+
+---
+
+## Datenschutzkonzept
+
+**100% lokale Verarbeitung möglich** – Keine Cloud-Pflicht, volle Datenkontrolle.
+
+Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschutz/)
+
+```
+┌───────────────────────────────────────────────────────────┐
+│                    100% Lokale Option                     │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐     │
+│   │    Audio    │-->│ whisper.cpp │-->│   Ollama    │     │
+│   │    (cpal)   │   │   (lokal)   │   │   (lokal)   │     │
+│   └─────────────┘   └─────────────┘   └─────────────┘     │
+│          |                                   |            │
+│          v                                   v            │
+│   ┌─────────────┐                     ┌─────────────┐     │
+│   │  Speicher   │<--------------------│   Analyse   │     │
+│   │ ~/Hablara/  │                     │  Ergebnis   │     │
+│   └─────────────┘                     └─────────────┘     │
+└───────────────────────────────────────────────────────────┘
+```
+
+### DSGVO-Compliance
+
+| Aspekt | Details |
+|--------|---------|
+| **Rechtliche Basis** | DSGVO Art. 6(1)(a) – Einwilligung |
+| **Datenklassifizierung** | Nicht-sensible personenbezogene Daten |
+| **Zweckbindung** | Audio ausschließlich für Transkription & Sprachanalyse |
+| **Speicherort** | `~/Hablara/recordings/` (macOS/Linux) bzw. `%USERPROFILE%\Hablara\recordings\` (Windows) |
+| **Cloud-Option** | Nur mit expliziter Einwilligung (OpenAI/Anthropic) |
+| **Auto-Cleanup** | Konfigurierbar (Standard: 25-500 Aufnahmen) |
+
+### Technische Maßnahmen
+
+| Maßnahme | Implementierung |
+|----------|-----------------|
+| **API Key Verschlüsselung** | macOS Keychain (AES-256-GCM) / Windows Credential Manager (DPAPI) |
+| **Keine Cloud-Pflicht** | whisper.cpp + Ollama vollständig offline |
+| **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
+| **Open-Source** | Transparenz durch offenen Code |
+
+### Sicherheitsarchitektur
+
+```
+┌───────────────────────────────────────────────────────────┐
+│                   Sicherheitsarchitektur                  │
+├───────────────────────────────────────────────────────────┤
+│                                                           │
+│  Input:   ┌────────────┐  ┌────────┐  ┌────────────┐      │
+│           │ User Input │->│  Zod   │->│ XSS-Filter │      │
+│           └────────────┘  └────────┘  └────────────┘      │
+│                                                           │
+│  Output:  ┌────────────┐  ┌──────────────┐                │
+│           │ LLM Output │->│ SafetyFilter │-> Display      │
+│           └────────────┘  └──────────────┘                │
+│                                                           │
+│  Storage: ┌─────────────────────────────────────────┐     │
+│           │ Lokal: ~/Hablara/ (%USERPROFILE% Win)   │     │
+│           │ API Keys: Keychain / Credential Manager │     │
+│           └─────────────────────────────────────────┘     │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+```
+
+- **Keine Cloud-Datenbank** – Keine Remote-Angriffsfläche, alle Daten lokal
+- **Verschlüsselte Credentials** – API Keys nur in Keychain / Credential Manager, niemals Klartext
+- **Input Validation** – Alle User-Eingaben via Zod Schema validiert
+- **XSS Protection** – LLM-Output wird vor Rendering sanitized
+- **Safety Filter** – Blockiert problematische LLM-Outputs
+- **App Sandbox** – macOS Hardened Runtime / Windows Security Features begrenzen Systemzugriff
+
+### Abgrenzung zu Gesundheits-Apps
+
+Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
+
+- **Art. 6 (Einwilligung):** Emotion-Tracking = Self-Awareness, keine klinische Diagnostik
+- **Abgrenzung:** Anders als MindDoc (klinisch, Art. 9) oder Daylio (nur Mood-Logging)
+
+**Wichtiger Hinweis:** Bei Verwendung von Cloud-Anbietern (OpenAI, Anthropic) gelten deren Datenschutzbestimmungen.
+
+---
+
+## Vergleich
+
+| Funktion | Hablará | Otter.ai | Fireflies.ai | Whisper (plain) |
+|---------|---------|----------|--------------|-----------------|
+| **Datenschutz (Offline)** | Ja (100%) | Nein | Nein | Ja |
+| **Emotions-Erkennung** | Ja (12 Features) | Nein | Ja (3-Tier Sentiment)* | Nein |
+| **Fehlschluss-Erkennung** | Ja (16 Typen) | Nein | Nein | Nein |
+| **Selbstreflexion** | Ja | Nein | Nein | Nein |
+| **Psychol. Frameworks** | Ja (7) | Nein | Nein | Nein |
+| **Meeting-Features** | Nein | Ja | Ja | Nein |
+| **Preis** | Open-Source | $16.99/mo | $10/mo (annual)* | Kostenlos |
+
+\*Fireflies bietet Sentiment-Analyse (positiv/negativ/neutral) ab Business-Plan — keine granulare Emotion-Detection wie Hablará (10 Emotionstypen, Dual-Track Audio+Text).
+\*Fireflies Pro: $18/mo (monthly) / $10/mo (annual). Otter.ai Pro: $16.99/mo (monthly) / $8.33/mo (annual).
+
+---
+
+## Mitwirken
+
+Beiträge sind willkommen! Siehe [GitHub Issues](https://github.com/fidpa/hablara/issues) für offene Aufgaben.
+
+- Bug-Reports und Feature-Requests via Issues
+- Pull Requests gerne gegen `main` Branch
+
+---
+
+## Lizenz
+
+MIT License – siehe [LICENSE](LICENSE) für Details.
+
+---
+
+**Autor:** Marc Allgeier | **Version:** 1.0.3
