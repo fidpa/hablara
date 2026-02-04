@@ -7,7 +7,7 @@ last_updated: 2026-02-04
 
 # Knowledge Base Structure
 
-## TL;DR (20 words)
+## Übersicht (20 words)
 
 78 kuratierte Knowledge-Chunks in 8 Kategorien (Emotion, Fallacy, GFK, Cognitive, etc.) fuer Hablará RAG Chatbot.
 

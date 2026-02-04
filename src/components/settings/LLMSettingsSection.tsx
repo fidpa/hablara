@@ -305,7 +305,7 @@ export function LLMSettingsSection({
               {settings.llm.model.includes("custom")
                 ? (isWindows()
                     ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
-                    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash")
+                    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash")
                 : `ollama pull ${settings.llm.model}`}
             </div>
             {settings.llm.model.includes("custom") && (

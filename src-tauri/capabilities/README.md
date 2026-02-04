@@ -7,7 +7,7 @@ last_updated: 2026-02-04
 
 # Tauri Capabilities
 
-## TL;DR (20 words)
+## Übersicht (20 words)
 
 Tauri 2.0 Capability-Definitionen fuer Hablará: Kontrolliert Frontend-Zugriff auf System-APIs (fs, shell, window, dialog).
 

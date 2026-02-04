@@ -1,12 +1,8 @@
 # Ollama Custom Models für Hablará
 
-## TL;DR
+## Übersicht
 
 Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Parametern für Emotion Analysis und Fallacy Detection.
-
----
-
-## Übersicht
 
 **Zweck:** Custom Ollama Models mit Hablará-spezifischen Optimierungen (8K Context, Temperature 0.3, System Prompt).
 
@@ -19,13 +15,15 @@ Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Paramete
 
 ## Verfügbare Modelle
 
-| Modell | MMLU | JSON Reliability | Emotion (M4 Pro) | Fallacy (M4 Pro) | RAM | Empfehlung |
-|--------|------|------------------|------------------|------------------|-----|------------|
-| **7B** | 74.8% | 92% | ~2.2s | ~4.3s | ~7 GB | **Default** - Beste Balance |
-| **14B** | 78.0% | 93% | ~2.8s | ~5.5s | ~9 GB | Höhere Präzision |
-| **32B** | 83.1% | 94% | ~3.5s | ~7.0s | ~20 GB | Maximale Qualität |
+| Modell | JSON Reliability | Geschwindigkeit | RAM | Empfehlung |
+|--------|------------------|-----------------|-----|------------|
+| **7B** | 92% | ⚡⚡⚡ Schnellste | ~7 GB | **Default** - Beste Balance |
+| **14B** | 93% | ⚡⚡ ~30% langsamer | ~9 GB | Höhere Präzision |
+| **32B** | 94% | ⚡ ~60% langsamer | ~20 GB | Maximale Qualität |
 
-**Empfehlung:** `qwen2.5:7b-custom` als Default (aktuell in `.claude/context.md` konfiguriert).
+_Performance ist stark systemabhängig (CPU/GPU, RAM, Modell-Cache). GPU-Beschleunigung (Metal/CUDA) dringend empfohlen._
+
+**Empfehlung:** `qwen2.5:7b-custom` als Default.
 
 ---
 
@@ -159,55 +157,26 @@ Deine Aufgaben:
 ---
 
 <details id="performance-vergleich">
-<summary><b>Performance-Vergleich</b> - M4 Pro Benchmarks (click to expand)</summary>
+<summary><b>Performance-Hinweise</b> - Systemabhängigkeit (click to expand)</summary>
 
-## Performance-Vergleich
+## Performance-Hinweise
 
-### M4 Pro (14 Cores, 64 GB RAM)
+**Performance ist stark systemabhängig** und wird beeinflusst von:
+- CPU/GPU-Leistung (GPU-Beschleunigung ist 2-3x schneller)
+- Verfügbarer RAM
+- Model-Cache (erste Inferenz langsamer)
+- Prompt-Länge
 
-**Emotion Analysis (Single Call):**
-```
-7B:  2.2s (SCHNELLSTE)
-14B: 2.8s (+27%)
-32B: 3.5s (+59%)
-```
+**Relative Geschwindigkeiten:**
+- **7B:** Schnellste (~Baseline)
+- **14B:** ~30% langsamer als 7B
+- **32B:** ~60% langsamer als 7B
 
-**Fallacy Detection (Längere Prompts):**
-```
-7B:  4.3s (SCHNELLSTE)
-14B: 5.5s (+28%)
-32B: 7.0s (+63%)
-```
-
-**Gesamt-Pipeline (Recording → Enrichment):**
-```
-7B:  ~10-12s  (EMPFOHLEN)
-14B: ~13-15s
-32B: ~17-20s
-```
-
-### Quality Metrics
-
-**JSON Validity (Basis: 500 Test-Prompts):**
-```
-7B:  92% (Ausreichend)
-14B: Multi-Modal (+1%)
-32B: 94% (+2%)
-```
-
-**Emotion Detection Accuracy:**
-```
-7B:  ~85%
-14B: ~87%
-32B: ~89%
-```
-
-**Fallacy Detection Recall:**
-```
-7B:  ~78%
-14B: ~82%
-32B: ~86%
-```
+**Typische Anwendungsfälle:**
+- **Development/Testing:** 7B (schnelle Iteration)
+- **Production (Standard):** 7B (beste Balance)
+- **Production (High Quality):** 14B (höhere Accuracy)
+- **Batch-Processing:** 7B (parallele Verarbeitung)
 
 </details>
 

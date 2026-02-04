@@ -107,7 +107,7 @@ describe("SetupHintsModal", () => {
     // Verify clipboard API was called with correct command
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(
-        "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash"
+        "ollama pull qwen2.5:7b"
       );
     });
 

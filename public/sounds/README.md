@@ -7,7 +7,7 @@ last_updated: 2026-02-04
 
 # Audio Sounds - Web Audio API Implementation
 
-## TL;DR (20 words)
+## Übersicht (20 words)
 
 Recording-Feedback-Sounds werden via Web Audio API synthetisiert (880Hz Start, 440Hz Stop) - keine externen Dateien noetig.
 

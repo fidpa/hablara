@@ -1,6 +1,6 @@
 # Scripts Directory
 
-## TL;DR
+## Überblick
 
 Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform (Bash + PowerShell).
 
@@ -13,8 +13,9 @@ Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform 
 **Enthaltene Scripts**:
 - `setup-whisper.sh` / `.ps1` - whisper.cpp (macOS: Metal, Windows: MSVC/CUDA)
 - `setup-whisper-linux.sh` - whisper.cpp (Linux: CPU/CUDA)
-- `setup-ollama-quick.sh` / `.ps1` - Ollama + qwen2.5:7b-custom
-- `setup-ollama-linux.sh` - Ollama für Linux (systemd-Integration)
+- `setup-ollama-quick.sh` - Ollama + qwen2.5:7b-custom (macOS)
+- `setup-ollama-quick.ps1` - Ollama + qwen2.5:7b-custom (Windows)
+- `setup-ollama-linux.sh` - Ollama + qwen2.5:7b-custom (Linux, systemd-Integration)
 - `bump-version.sh` - Versionsnummern synchronisieren
 
 ---
@@ -28,9 +29,6 @@ Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform 
 
 # 2. Whisper installieren (optional - fuer lokale Transkription)
 ./scripts/setup-whisper.sh
-
-# 3. App starten
-pnpm run dev
 ```
 
 ### Linux
@@ -40,9 +38,6 @@ pnpm run dev
 
 # 2. Whisper installieren (optional - fuer lokale Transkription)
 ./scripts/setup-whisper-linux.sh
-
-# 3. App starten
-pnpm run dev
 ```
 
 ### Windows
@@ -52,9 +47,6 @@ pnpm run dev
 
 # 2. Whisper installieren (optional)
 .\scripts\setup-whisper.ps1
-
-# 3. App starten
-pnpm run dev
 ```
 
 **Gesamtdauer:** ~5-15 Min (abhaengig von Downloads)
@@ -95,9 +87,9 @@ Installiert whisper.cpp mit Metal-Acceleration fuer macOS.
 
 ---
 
-### setup-ollama-quick.sh
+### setup-ollama-quick.sh (macOS)
 
-**One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model.
+**One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model auf macOS.
 
 **Verwendung:**
 ```bash
@@ -158,9 +150,9 @@ Installiert whisper.cpp fuer Linux (Ubuntu/Debian/Fedora/Arch).
 
 ---
 
-### setup-ollama-linux.sh
+### setup-ollama-linux.sh (Linux)
 
-**One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model.
+**One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model auf Linux.
 
 **Verwendung:**
 ```bash
@@ -319,7 +311,10 @@ ollama create qwen2.5:14b-custom -f scripts/ollama/qwen2.5-14b-custom.modelfile
 - System Prompt: JSON-Mode
 - Context Window: 32k tokens
 
-**Automatisch via:** `setup-ollama-quick.sh` oder `setup-ollama-quick.ps1`
+**Automatisch via:**
+- macOS: `setup-ollama-quick.sh`
+- Linux: `setup-ollama-linux.sh`
+- Windows: `setup-ollama-quick.ps1`
 
 </details>
 
@@ -390,7 +385,7 @@ sudo pacman -S cmake base-devel git curl
 
 ## Exit Codes
 
-Alle Scripts verwenden standardisierte Exit-Codes fuer CI/CD-Integration:
+Alle Scripts verwenden standardisierte Exit-Codes:
 
 ### Whisper Scripts (setup-whisper*.sh/ps1)
 

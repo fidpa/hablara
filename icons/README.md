@@ -8,7 +8,7 @@ designer: DALL-E 3 (OpenAI) + Manual Refinement
 
 # Hablará App Icon
 
-## TL;DR (20 words)
+## Übersicht (20 words)
 
 Neural Voice Wave Icon (Liquid Glass): 2 glänzende Kugeln + 3-4 dicke Wellen, macOS 26 Tahoe compliant, 32px-optimiert.
 

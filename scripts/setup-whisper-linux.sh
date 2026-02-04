@@ -10,7 +10,7 @@
 # =============================================================================
 #
 # Usage:
-#   ./setup-whisper-linux.sh [model] [cuda]
+#   ./setup-whisper-linux.sh [model] [cuda] [options]
 #
 # Arguments:
 #   model - Model name (default: base)
@@ -18,10 +18,17 @@
 #   cuda  - Enable CUDA acceleration (default: false)
 #           Set to "true" for NVIDIA GPU acceleration
 #
+# Options:
+#   --auto-install   - Install dependencies automatically without prompt
+#   --dry-run        - Show what would be done without executing
+#   --no-version-check - Skip minimum version checks for tools
+#
 # Examples:
-#   ./setup-whisper-linux.sh                # base model, CPU only
-#   ./setup-whisper-linux.sh small          # small model, CPU only
-#   ./setup-whisper-linux.sh base true      # base model with CUDA
+#   ./setup-whisper-linux.sh                     # base model, CPU only
+#   ./setup-whisper-linux.sh small               # small model, CPU only
+#   ./setup-whisper-linux.sh base true           # base model with CUDA
+#   ./setup-whisper-linux.sh --auto-install      # auto-install dependencies
+#   ./setup-whisper-linux.sh --dry-run           # show commands only
 #
 # Exit codes:
 #   0 - Success
@@ -61,9 +68,52 @@ BINARIES_DIR="$TAURI_DIR/binaries"
 MODELS_DIR="$TAURI_DIR/models"
 BUILD_DIR="$PROJECT_ROOT/.whisper-build"
 
-# Arguments
-MODEL="${1:-base}"
-ENABLE_CUDA="${2:-false}"
+# sudo credential management
+SUDO_KEEPALIVE_PID=""
+
+# Parse arguments
+MODEL="base"
+ENABLE_CUDA="false"
+AUTO_INSTALL="false"
+DRY_RUN="false"
+SKIP_VERSION_CHECK="false"
+
+# Process positional and optional arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --auto-install)
+            AUTO_INSTALL="true"
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN="true"
+            shift
+            ;;
+        --no-version-check)
+            SKIP_VERSION_CHECK="true"
+            shift
+            ;;
+        --help|-h)
+            echo "Usage: $0 [model] [cuda] [options]"
+            echo "See script header for detailed documentation"
+            exit 0
+            ;;
+        *)
+            # Positional arguments
+            if [[ -z "${MODEL_SET:-}" ]]; then
+                MODEL="$1"
+                MODEL_SET=true
+            elif [[ -z "${CUDA_SET:-}" ]]; then
+                ENABLE_CUDA="$1"
+                CUDA_SET=true
+            else
+                echo "Unknown argument: $1"
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
 
 # Validate model argument
 valid_models=("tiny" "tiny.en" "base" "base.en" "small" "small.en" "medium" "medium.en")
@@ -114,10 +164,22 @@ log_error() {
 # Cleanup function for error handling
 cleanup() {
     local exit_code=$?
+
+    # Stop sudo keep-alive if running
+    stop_sudo_keepalive
+
     if [[ $exit_code -ne 0 ]]; then
         log_error "Build failed - cleaning up partial artifacts"
-        [[ -d "$BUILD_DIR/build" ]] && rm -rf "$BUILD_DIR/build"
+
+        # Safe cleanup with lock to prevent race conditions
+        local lock_file="$BUILD_DIR/.cleanup.lock"
+        if mkdir "$lock_file" 2>/dev/null; then
+            # Remove build artifacts
+            rm -rf "$BUILD_DIR/build" 2>/dev/null || true
+            rmdir "$lock_file" 2>/dev/null
+        fi
     fi
+
     exit $exit_code
 }
 trap cleanup EXIT INT TERM
@@ -201,6 +263,333 @@ get_ram_gb() {
 get_file_size() {
     local file="$1"
     stat -c%s "$file" 2>/dev/null || echo "0"
+}
+
+# Compare semantic versions (returns 0 if v1>=v2, 1 if v1<v2)
+version_compare() {
+    local v1="$1"
+    local v2="$2"
+
+    # Validate input length (prevent DoS via excessive memory)
+    if [[ ${#v1} -gt 50 ]] || [[ ${#v2} -gt 50 ]]; then
+        log_error "Version string too long (max 50 chars)"
+        return 1
+    fi
+
+    # Strict validation: only digits and dots (prevent malformed input)
+    if ! [[ "$v1" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+        log_warn "Invalid version format: '$v1' (expected: X.Y.Z)"
+        return 1
+    fi
+    if ! [[ "$v2" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+        log_warn "Invalid version format: '$v2' (expected: X.Y.Z)"
+        return 1
+    fi
+
+    # Split versions into arrays
+    IFS='.' read -ra V1 <<< "$v1"
+    IFS='.' read -ra V2 <<< "$v2"
+
+    # Compare each component
+    local max_len=${#V1[@]}
+    [[ ${#V2[@]} -gt $max_len ]] && max_len=${#V2[@]}
+
+    for ((i=0; i<max_len; i++)); do
+        local n1="${V1[i]:-0}"
+        local n2="${V2[i]:-0}"
+
+        # Remove leading zeros and validate numeric
+        n1="${n1#0*}"
+        n2="${n2#0*}"
+        n1="${n1:-0}"
+        n2="${n2:-0}"
+
+        if ((n1 > n2)); then
+            return 0  # v1 >= v2
+        elif ((n1 < n2)); then
+            return 1  # v1 < v2
+        fi
+    done
+
+    return 0  # v1 == v2
+}
+
+# Check tool version against minimum requirement
+check_tool_version() {
+    local tool="$1"
+    local min_version="$2"
+    local current_version=""
+
+    case "$tool" in
+        cmake)
+            current_version=$(cmake --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+            ;;
+        gcc|g++)
+            current_version=$(gcc --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+            ;;
+        clang)
+            current_version=$(clang --version 2>/dev/null | head -1 | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+            ;;
+        git)
+            current_version=$(git --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' || echo "0.0.0")
+            ;;
+        *)
+            log_warn "Version check für $tool nicht implementiert"
+            return 0
+            ;;
+    esac
+
+    if version_compare "$current_version" "$min_version"; then
+        log_success "$tool version $current_version (>= $min_version required)"
+        return 0
+    else
+        log_warn "$tool version $current_version ist älter als empfohlen ($min_version)"
+        log_info "Installation könnte fehlschlagen - bitte aktualisieren"
+        return 1
+    fi
+}
+
+# Minimum required versions
+declare -A MIN_VERSIONS=(
+    [cmake]="3.10"
+    [gcc]="7.0"
+    [git]="2.0"
+)
+
+# Package installation commands (DRY principle)
+declare -A INSTALL_CMDS=(
+    [apt]="sudo apt-get update && sudo apt-get install -y git curl cmake build-essential"
+    [dnf]="sudo dnf install -y git curl cmake gcc-c++ make"
+    [pacman]="sudo pacman -S --needed --noconfirm git curl cmake base-devel"
+    [zypper]="sudo zypper install -y git curl cmake gcc-c++ make"
+)
+
+# Check if running in CI/CD environment
+is_ci_environment() {
+    [[ "${CI:-}" == "true" ]] ||
+    [[ "${GITHUB_ACTIONS:-}" == "true" ]] ||
+    [[ "${GITLAB_CI:-}" == "true" ]] ||
+    [[ "${JENKINS_HOME:-}" != "" ]] ||
+    [[ "${NONINTERACTIVE:-}" == "true" ]] ||
+    [[ ! -t 0 ]]  # No TTY = non-interactive
+}
+
+# Check sudo availability and validate credentials
+check_sudo() {
+    if ! command -v sudo &> /dev/null; then
+        log_error "sudo nicht verfügbar"
+        log_info "Als root ausführen oder sudo installieren"
+        return 1
+    fi
+
+    # Validate sudo credentials (prompt if needed)
+    if ! sudo -v; then
+        log_error "Sudo-Authentifizierung fehlgeschlagen"
+        return 1
+    fi
+
+    log_success "Sudo-Berechtigung validiert"
+    return 0
+}
+
+# Start sudo credential keep-alive background process
+start_sudo_keepalive() {
+    # Validate sudo first
+    if ! sudo -v; then
+        return 1
+    fi
+
+    # Keep-alive: update sudo timestamp every 50 seconds
+    (
+        while true; do
+            sudo -n true
+            sleep 50
+            # Exit if parent process (script) is gone
+            kill -0 "$$" 2>/dev/null || exit
+        done
+    ) &
+
+    SUDO_KEEPALIVE_PID=$!
+    log_info "Sudo keep-alive aktiviert (PID: $SUDO_KEEPALIVE_PID)"
+}
+
+# Stop sudo credential keep-alive
+stop_sudo_keepalive() {
+    if [[ -n "$SUDO_KEEPALIVE_PID" ]]; then
+        kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
+        log_info "Sudo keep-alive beendet"
+    fi
+}
+
+# Show installation instructions for current package manager
+show_install_instructions() {
+    local pkg_manager="$1"
+
+    echo "Installation instructions by distribution:"
+    echo ""
+
+    case "$pkg_manager" in
+        apt)
+            echo "  Ubuntu/Debian:"
+            echo "    ${INSTALL_CMDS[apt]}"
+            ;;
+        dnf)
+            echo "  Fedora/RHEL:"
+            echo "    ${INSTALL_CMDS[dnf]}"
+            ;;
+        pacman)
+            echo "  Arch Linux:"
+            echo "    ${INSTALL_CMDS[pacman]}"
+            ;;
+        zypper)
+            echo "  openSUSE:"
+            echo "    ${INSTALL_CMDS[zypper]}"
+            ;;
+        *)
+            echo "  Unknown distribution - please install manually:"
+            echo "    - git"
+            echo "    - curl"
+            echo "    - cmake"
+            echo "    - C++ compiler (gcc/g++ or clang)"
+            echo "    - make"
+            ;;
+    esac
+    echo ""
+}
+
+# Execute package installation
+do_install_dependencies() {
+    local pkg_manager="$1"
+    local max_retries=2
+    local retry_count=0
+
+    if [[ -z "${INSTALL_CMDS[$pkg_manager]:-}" ]]; then
+        log_error "Unbekannter Package Manager: $pkg_manager"
+        return 1
+    fi
+
+    # Dry-run mode: show commands only
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        echo ""
+        log_info "[DRY-RUN] Würde ausführen:"
+        echo "  ${INSTALL_CMDS[$pkg_manager]}"
+        echo ""
+        log_success "[DRY-RUN] Dependencies würden installiert werden"
+        return 0
+    fi
+
+    # Execute installation with retry logic
+    while [[ $retry_count -lt $max_retries ]]; do
+        if [[ $retry_count -gt 0 ]]; then
+            log_warn "Wiederhole Installation (Versuch $((retry_count + 1))/$max_retries)..."
+            sleep 2  # Brief pause before retry
+        else
+            log_info "Installiere Dependencies mit $pkg_manager..."
+        fi
+
+        # Execute with bash -c instead of eval to prevent code injection
+        if bash -c "${INSTALL_CMDS[$pkg_manager]}"; then
+            log_success "Dependencies installiert"
+            return 0
+        else
+            retry_count=$((retry_count + 1))
+            if [[ $retry_count -lt $max_retries ]]; then
+                log_warn "Installation fehlgeschlagen - versuche erneut..."
+            fi
+        fi
+    done
+
+    log_error "Installation nach $max_retries Versuchen fehlgeschlagen"
+    return 1
+}
+
+# Interactive dependency installation (main function)
+install_dependencies() {
+    local missing_deps=("$@")
+
+    if [[ ${#missing_deps[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    log_warn "Fehlende Dependencies: ${missing_deps[*]}"
+    echo ""
+
+    # Detect package manager
+    local pkg_manager
+    pkg_manager=$(get_package_manager)
+
+    # CI/CD mode: Show instructions only (unless dry-run or auto-install)
+    if is_ci_environment && [[ "${DRY_RUN}" != "true" ]] && [[ "${AUTO_INSTALL}" != "true" ]]; then
+        log_info "CI/CD-Umgebung erkannt - zeige Installationsanweisungen:"
+        show_install_instructions "$pkg_manager"
+        exit 1
+    fi
+
+    # Dry-run mode: Show what would happen
+    if [[ "${DRY_RUN}" == "true" ]]; then
+        log_info "[DRY-RUN] Würde folgende Dependencies installieren:"
+        show_install_instructions "$pkg_manager"
+        do_install_dependencies "$pkg_manager"  # Will only show commands
+        return 0
+    fi
+
+    # Auto-install mode: Install directly without prompt
+    if [[ "${AUTO_INSTALL}" == "true" ]]; then
+        log_info "Auto-Install-Modus aktiviert"
+
+        if ! check_sudo; then
+            show_install_instructions "$pkg_manager"
+            exit 1
+        fi
+
+        # Start sudo keep-alive for long installations
+        start_sudo_keepalive || {
+            log_error "Sudo keep-alive konnte nicht gestartet werden"
+            exit 1
+        }
+
+        if ! do_install_dependencies "$pkg_manager"; then
+            show_install_instructions "$pkg_manager"
+            exit 1
+        fi
+        return 0
+    fi
+
+    # Interactive mode: Check sudo and prompt user
+    if ! check_sudo; then
+        show_install_instructions "$pkg_manager"
+        exit 1
+    fi
+
+    # Interactive prompt with timeout
+    read -t 30 -p "Dependencies jetzt installieren? (sudo erforderlich) [y/N] " -n 1 -r
+    local read_status=$?
+    echo ""
+
+    # Handle timeout
+    if [[ $read_status -gt 128 ]]; then
+        log_warn "Timeout - überspringe Installation"
+        show_install_instructions "$pkg_manager"
+        exit 1
+    fi
+
+    # Process user response
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        # Start sudo keep-alive for long installations
+        start_sudo_keepalive || {
+            log_error "Sudo keep-alive konnte nicht gestartet werden"
+            exit 1
+        }
+
+        if ! do_install_dependencies "$pkg_manager"; then
+            show_install_instructions "$pkg_manager"
+            exit 1
+        fi
+    else
+        log_info "Installation abgebrochen - bitte manuell installieren:"
+        show_install_instructions "$pkg_manager"
+        exit 1
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -293,46 +682,41 @@ if ! check_dependency "make"; then
     MISSING_DEPS+=("make")
 fi
 
-# If dependencies are missing, provide installation instructions
-if [[ ${#MISSING_DEPS[@]} -gt 0 ]]; then
-    log_error "Missing dependencies: ${MISSING_DEPS[*]}"
-    echo ""
-    echo "Installation instructions by distribution:"
-    echo ""
-
-    case "$PKG_MANAGER" in
-        apt)
-            echo "  Ubuntu/Debian:"
-            echo "    sudo apt-get update"
-            echo "    sudo apt-get install -y git curl cmake build-essential"
-            ;;
-        dnf)
-            echo "  Fedora/RHEL:"
-            echo "    sudo dnf install -y git curl cmake gcc-c++ make"
-            ;;
-        pacman)
-            echo "  Arch Linux:"
-            echo "    sudo pacman -S git curl cmake base-devel"
-            ;;
-        zypper)
-            echo "  openSUSE:"
-            echo "    sudo zypper install -y git curl cmake gcc-c++ make"
-            ;;
-        *)
-            echo "  Unknown distribution - please install manually:"
-            echo "    - git"
-            echo "    - curl"
-            echo "    - cmake"
-            echo "    - C++ compiler (gcc/g++ or clang)"
-            echo "    - make"
-            ;;
-    esac
-
-    echo ""
-    exit 1
-fi
+# Install missing dependencies (interactive or CI-friendly)
+install_dependencies "${MISSING_DEPS[@]}"
 
 log_success "All dependencies found"
+
+# Version checks (skip if --no-version-check flag is set)
+if [[ "${SKIP_VERSION_CHECK}" != "true" ]]; then
+    log_step "Checking tool versions..."
+
+    VERSION_WARNINGS=0
+
+    for tool in "${!MIN_VERSIONS[@]}"; do
+        if command -v "$tool" &> /dev/null; then
+            if ! check_tool_version "$tool" "${MIN_VERSIONS[$tool]}"; then
+                VERSION_WARNINGS=$((VERSION_WARNINGS + 1))
+            fi
+        fi
+    done
+
+    if [[ $VERSION_WARNINGS -eq 0 ]]; then
+        log_success "All tool versions meet minimum requirements"
+    else
+        log_warn "$VERSION_WARNINGS tool(s) have older versions than recommended"
+        log_info "Build may still succeed, but consider updating for best results"
+        echo ""
+        read -t 10 -p "Continue anyway? [Y/n] " -n 1 -r || true
+        echo ""
+        if [[ $REPLY =~ ^[Nn]$ ]]; then
+            log_info "Aborted by user"
+            exit 1
+        fi
+    fi
+else
+    log_info "Version checks skipped (--no-version-check)"
+fi
 
 # -----------------------------------------------------------------------------
 # Clone whisper.cpp
@@ -343,10 +727,26 @@ log_step "Setting up whisper.cpp..."
 if [[ -d "$BUILD_DIR" ]]; then
     log_info "Build directory exists, updating..."
     cd "$BUILD_DIR"
-    git pull --quiet
+
+    # Verify remote URL before pull (prevent supply chain attack)
+    EXPECTED_REMOTE="https://github.com/ggml-org/whisper.cpp.git"
+    CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+
+    if [[ "$CURRENT_REMOTE" != "$EXPECTED_REMOTE" ]]; then
+        log_error "Unexpected git remote detected"
+        log_error "  Expected: $EXPECTED_REMOTE"
+        log_error "  Found:    $CURRENT_REMOTE"
+        log_info "Repository may be compromised - aborting"
+        exit 2
+    fi
+
+    # Pull with SSL verification enabled
+    git -c http.sslVerify=true pull --quiet
+
 else
     log_info "Cloning whisper.cpp..."
-    git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$BUILD_DIR"
+    # Clone with SSL verification
+    git -c http.sslVerify=true clone --depth 1 https://github.com/ggml-org/whisper.cpp.git "$BUILD_DIR"
     cd "$BUILD_DIR"
 fi
 
@@ -449,6 +849,16 @@ if ! bash ./models/download-ggml-model.sh "$MODEL"; then
 fi
 
 MODEL_FILE="models/ggml-${MODEL}.bin"
+
+# Validate model path (prevent path traversal)
+CANONICAL_MODEL_PATH=$(realpath -m "$MODEL_FILE" 2>/dev/null || echo "$MODEL_FILE")
+CANONICAL_MODELS_DIR=$(realpath -m "$BUILD_DIR/models" 2>/dev/null || echo "$BUILD_DIR/models")
+
+if [[ "$CANONICAL_MODEL_PATH" != "$CANONICAL_MODELS_DIR"* ]]; then
+    log_error "Path traversal detected in model file: $MODEL_FILE"
+    exit 3
+fi
+
 if [[ ! -f "$MODEL_FILE" ]]; then
     log_error "Model file not found after download"
     exit 3
