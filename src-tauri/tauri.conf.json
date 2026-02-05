@@ -10,7 +10,8 @@
     },
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "pnpm run build",
-    "frontendDist": "../out"
+    "beforeBundleCommand": "rm -rf dist && cp -r ../out dist",
+    "frontendDist": "dist"
   },
   "app": {
     "withGlobalTauri": true,
