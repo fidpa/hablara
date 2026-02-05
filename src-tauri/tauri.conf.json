@@ -66,6 +66,13 @@
       "tsp": false,
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
+      },
+      "wix": {
+        "language": "de-DE"
+      },
+      "nsis": {
+        "languages": ["German"],
+        "displayLanguageSelector": false
       }
     },
     "linux": {

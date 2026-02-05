@@ -33,10 +33,10 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 | Plattform | Status | Architektur | Hinweise |
 |----------|--------|--------------|-------|
-| **macOS** | ✅ Produktion | ARM64 (Apple Silicon) | MLX-Whisper verfügbar |
-| **macOS** | ✅ Produktion | x86_64 (Intel) | Nur whisper.cpp |
-| **Windows** | ✅ Produktion | x86_64 | whisper.cpp CPU, kein MLX, WASAPI Audio |
-| **Linux** | ✅ Produktion | x86_64 | Ubuntu 20.04+, .deb/.rpm |
+| **macOS** | ✅ Verfügbar | ARM64 (Apple Silicon) | MLX-Whisper verfügbar |
+| **macOS** | ✅ Verfügbar | x86_64 (Intel) | Nur whisper.cpp |
+| **Windows** | ✅ Verfügbar | x86_64 | whisper.cpp CPU, kein MLX, WASAPI Audio |
+| **Linux** | ✅ Verfügbar | x86_64 | Ubuntu 20.04+, .deb/.rpm/.AppImage |
 
 > **Hinweis:** macOS (ARM64) ist die primäre Entwicklungsplattform.
 
@@ -78,6 +78,59 @@ brew install --cask fidpa/hablara/hablara
 ```
 
 Updates: `brew upgrade --cask hablara`
+
+</details>
+
+#### 2️⃣ Ollama installieren (empfohlen)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+```
+
+<details>
+<summary>📋 Was macht dieser Befehl?</summary>
+
+1. Installiert Ollama (falls nicht vorhanden)
+2. Lädt qwen2.5:7b Modell (~4.7 GB)
+3. Erstellt optimiertes Custom-Modell
+4. Verifiziert Installation
+
+</details>
+
+---
+
+### ![Linux](https://img.shields.io/badge/-Linux-FCC624?logo=linux&logoColor=black) Installation
+
+**Voraussetzungen:** Ubuntu 20.04+ / Debian 11+ / Fedora 36+ · x64 · 10 GB freier Speicher
+
+**Download:** [GitHub Releases][releases] – .deb (Debian/Ubuntu) | .rpm (Fedora/RHEL) | .AppImage (Universal)
+
+#### 1️⃣ Hablará installieren
+- Paket herunterladen (.deb, .rpm oder .AppImage)
+- Mit Paketmanager installieren oder AppImage direkt ausführen
+
+<details>
+<summary>📋 Installations-Befehle nach Distribution</summary>
+
+**Debian/Ubuntu (.deb):**
+```bash
+sudo dpkg -i hablara_1.0.5_amd64.deb
+sudo apt-get install -f  # Falls Abhängigkeiten fehlen
+```
+
+**Fedora/RHEL (.rpm):**
+```bash
+sudo rpm -i hablara-1.0.5-1.x86_64.rpm
+# oder: sudo dnf install hablara-1.0.5-1.x86_64.rpm
+```
+
+**AppImage (Universal, keine Installation nötig):**
+```bash
+chmod +x hablara_1.0.5_amd64.AppImage
+./hablara_1.0.5_amd64.AppImage
+```
+
+AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) ins Anwendungsmenü integriert werden.
 
 </details>
 
@@ -434,7 +487,7 @@ curl -L -o src-tauri/models/ggml-model.bin \
 # Invoke-WebRequest -Uri "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" -OutFile "src-tauri\models\ggml-model.bin"
 ```
 
-### 4. Ollama einrichten (Produktions-Standard für LLM)
+### 4. Ollama einrichten (empfohlen für lokale KI)
 
 **Ollama ist der empfohlene LLM-Anbieter** für optimale Performance (persistent server).
 
@@ -482,6 +535,7 @@ pnpm tauri build
 |-----------|--------|
 | macOS | `src-tauri/target/release/bundle/dmg/` |
 | Windows | `src-tauri/target/release/bundle/nsis/` und `msi/` |
+| Linux | `src-tauri/target/release/bundle/deb/`, `rpm/` und `appimage/` |
 
 </details>
 
@@ -505,8 +559,8 @@ Hablará unterstützt drei LLM-Anbieter:
 **Ja**, mit OpenAI/Anthropic API-Key (Cloud-basiert).
 
 ### Funktioniert es auf Windows/Linux?
-**Windows:** Ja, Produktionsversion verfügbar (x64, whisper.cpp CPU). Download im [GitHub Releases][releases].
-**Linux:** Ja, Produktionsversion verfügbar (x64, Ubuntu 20.04+). Download: .deb oder .rpm im [GitHub Releases][releases].
+**Windows:** Ja, vollständig unterstützt (x64, whisper.cpp CPU). Download im [GitHub Releases][releases].
+**Linux:** Ja, vollständig unterstützt (x64, Ubuntu 20.04+). Download: .deb, .rpm oder .AppImage im [GitHub Releases][releases].
 
 ### Wie groß ist das Ollama-Model?
 **6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
@@ -764,7 +818,7 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.4
+**Autor:** Marc Allgeier | **Version:** 1.0.5
 
 ---
 
