@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)][releases]
+[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 [![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
@@ -114,20 +114,20 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Debian/Ubuntu (.deb):**
 ```bash
-sudo dpkg -i hablara_1.0.5_amd64.deb
+sudo dpkg -i hablara_1.0.6_amd64.deb
 sudo apt-get install -f  # Falls Abhängigkeiten fehlen
 ```
 
 **Fedora/RHEL (.rpm):**
 ```bash
-sudo rpm -i hablara-1.0.5-1.x86_64.rpm
-# oder: sudo dnf install hablara-1.0.5-1.x86_64.rpm
+sudo rpm -i hablara-1.0.6-1.x86_64.rpm
+# oder: sudo dnf install hablara-1.0.6-1.x86_64.rpm
 ```
 
 **AppImage (Universal, keine Installation nötig):**
 ```bash
-chmod +x hablara_1.0.5_amd64.AppImage
-./hablara_1.0.5_amd64.AppImage
+chmod +x hablara_1.0.6_amd64.AppImage
+./hablara_1.0.6_amd64.AppImage
 ```
 
 AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) ins Anwendungsmenü integriert werden.
@@ -149,6 +149,63 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 4. Verifiziert Installation
 
 </details>
+
+#### 3️⃣ API Key Speicherung (OpenAI/Anthropic)
+
+**Cloud-Provider (OpenAI/Anthropic) benötigen einen Schlüsselbund-Dienst:**
+
+<details>
+<summary>📋 Benötigte Pakete nach Desktop-Umgebung</summary>
+
+**GNOME (Standard bei Ubuntu, Fedora, Debian):**
+```bash
+# Meist bereits installiert
+sudo apt install gnome-keyring  # Debian/Ubuntu
+sudo dnf install gnome-keyring  # Fedora/RHEL
+```
+
+**KDE Plasma 6 (2024+):**
+```bash
+sudo apt install kwalletmanager  # Debian/Ubuntu
+sudo dnf install kwalletmanager  # Fedora/RHEL
+# Plasma 6 nutzt ksecretd (Secret Service native, voll kompatibel)
+```
+
+**KDE Plasma 5 (älter):**
+```bash
+sudo apt install kwalletmanager  # Debian/Ubuntu
+sudo dnf install kwalletmanager  # Fedora/RHEL
+# Plasma 5 benötigt Secret Service Bridge-Aktivierung in KWallet-Einstellungen
+```
+
+**Minimal Window Managers (i3, bspwm, etc.):**
+```bash
+# Manuelle Installation von GNOME Keyring (auch ohne GNOME Desktop)
+sudo apt install gnome-keyring libsecret-1-0  # Debian/Ubuntu
+sudo dnf install gnome-keyring libsecret      # Fedora/RHEL
+
+# Daemon manuell starten (falls nicht automatisch):
+eval $(gnome-keyring-daemon --start --components=secrets)
+```
+
+**KeePassXC (Alternative für alle Desktop-Umgebungen):**
+```bash
+sudo apt install keepassxc  # Debian/Ubuntu
+sudo dnf install keepassxc  # Fedora/RHEL
+# KeePassXC → Einstellungen → Secret Service Integration aktivieren
+```
+
+</details>
+
+**⚠️ Hinweis für Flatpak/Snap:**
+- Direct Distribution: .deb/.rpm/.AppImage funktionieren Out-of-the-Box
+- Flatpak/Snap: API Keys können in v1.0.x NICHT sicher gespeichert werden (XDG Portal Secret API fehlt)
+- **Workaround:** Ollama (lokal) nutzen oder auf Direct Distribution umsteigen
+
+**Troubleshooting:**
+- Fehler "Kein Schlüsselbund-Dienst gefunden" → Paket installieren (siehe oben)
+- Fehler "Schlüsselbund antwortet nicht" → Daemon starten: `gnome-keyring-daemon --start`
+- KDE: Secret Service in KWallet aktivieren: `systemsettings5` → Wallet → "Enable Secret Service"
 
 ---
 
@@ -818,7 +875,7 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.5
+**Autor:** Marc Allgeier | **Version:** 1.0.6
 
 ---
 
