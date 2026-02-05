@@ -58,11 +58,7 @@
     "longDescription": "Hablará: Desktop app for voice recording with real-time transcription, emotion analysis, and argumentation fallacy detection.",
     "macOS": {
       "entitlements": "./entitlements.plist",
-      "minimumSystemVersion": "10.15",
-      "signingIdentity": "Developer ID Application: Marc Allgeier (94H68V6M99)",
-      "notarize": {
-        "teamId": "94H68V6M99"
-      }
+      "minimumSystemVersion": "10.15"
     },
     "windows": {
       "certificateThumbprint": null,
