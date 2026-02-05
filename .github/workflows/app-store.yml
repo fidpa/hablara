@@ -310,6 +310,39 @@ jobs:
         env:
           NEXT_PUBLIC_APP_STORE: "true"
 
+      # Workaround: Tauri bundler bug doesn't copy frontend in Universal Binary builds
+      # See: https://github.com/tauri-apps/tauri/issues - Universal Binary frontend bundling
+      - name: Copy frontend to bundle (Universal Binary workaround)
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
+          UP_DIR="$APP_PATH/Contents/Resources/_up_"
+
+          echo "🔧 Manual frontend copy (Tauri Universal Binary bundler workaround)"
+          echo "Source: out/"
+          echo "Target: $UP_DIR"
+
+          # Verify source exists
+          if [ ! -d "out" ]; then
+            echo "❌ ERROR: out/ directory not found!"
+            ls -la
+            exit 1
+          fi
+
+          # Check if frontend already copied (skip if already present)
+          if [ -f "$UP_DIR/index.html" ]; then
+            echo "✅ Frontend already present in bundle, skipping copy"
+          else
+            echo "⚠️ Frontend missing from bundle, copying manually..."
+            # Create _up_ if it doesn't exist
+            mkdir -p "$UP_DIR"
+            # Copy all frontend assets
+            cp -r out/* "$UP_DIR/"
+            echo "✅ Frontend copied successfully"
+          fi
+
+          # Final verification
+          ls -la "$UP_DIR" | head -10
+
       - name: Verify frontend in app bundle
         run: |
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
