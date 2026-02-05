@@ -19,6 +19,13 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      debug_build:
+        description: 'Run debug ARM64-only build'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: write
@@ -211,10 +218,47 @@ jobs:
           done
 
       # ========================================
+      # Build Frontend (explicit step for debugging)
+      # ========================================
+      - name: Build frontend (Next.js)
+        run: |
+          echo "🔨 Building Next.js frontend..."
+          pnpm run build
+
+          echo ""
+          echo "=== Verify out/ directory exists ==="
+          if [ -d "out" ]; then
+            echo "✅ out/ directory exists"
+            ls -la out/ | head -20
+            echo ""
+            echo "=== Check for index.html ==="
+            if [ -f "out/index.html" ]; then
+              echo "✅ index.html exists ($(wc -c < out/index.html) bytes)"
+            else
+              echo "❌ ERROR: index.html NOT FOUND!"
+              exit 1
+            fi
+            echo ""
+            echo "=== Check for _next/ ==="
+            if [ -d "out/_next" ]; then
+              echo "✅ _next/ directory exists"
+              find out/_next -type f | wc -l | xargs echo "   Files in _next/:"
+            else
+              echo "❌ ERROR: _next/ directory NOT FOUND!"
+              exit 1
+            fi
+          else
+            echo "❌ ERROR: out/ directory NOT FOUND!"
+            echo "Current directory contents:"
+            ls -la
+            exit 1
+          fi
+
+      # ========================================
       # Build Tauri Universal App
       # ========================================
       - name: Build Tauri universal app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Code Signing
@@ -260,6 +304,100 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: --target universal-apple-darwin --bundles dmg
+
+  # ========================================
+  # DEBUG: ARM64-only build to test if Universal Binary is the issue
+  # ========================================
+  build-arm64-debug:
+    name: Debug ARM64-only Build
+    runs-on: macos-14
+    # Only run if universal build fails, or manually triggered with debug_build=true
+    if: failure() || (github.event_name == 'workflow_dispatch' && inputs.debug_build == true)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache whisper model
+        id: cache-whisper-model-arm64
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
+
+      - name: Download whisper model (if not cached)
+        if: steps.cache-whisper-model-arm64.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p src-tauri/models
+          curl -L --progress-bar \
+            "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" \
+            -o src-tauri/models/ggml-german-turbo.bin
+
+      - name: Build whisper.cpp (ARM64 only)
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          cd /tmp/whisper-build
+          cmake -B build -DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_EXAMPLES=ON
+          cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+          mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
+          cp build/bin/whisper-cli $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin
+          chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-*
+
+      - name: Build frontend explicitly
+        run: |
+          echo "🔨 Building Next.js frontend..."
+          pnpm run build
+          echo "=== out/ contents ==="
+          ls -la out/
+          test -f out/index.html && echo "✅ index.html exists" || echo "❌ index.html MISSING"
+
+      - name: Build Tauri (ARM64 only, no signing)
+        run: |
+          echo "🔨 Building Tauri for ARM64 only..."
+          pnpm tauri build --target aarch64-apple-darwin --bundles app
+
+      - name: Verify app bundle structure
+        run: |
+          APP_PATH="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Hablara.app"
+          echo "=== App Bundle Structure ==="
+          ls -la "$APP_PATH/Contents/Resources/" || echo "Resources not found"
+          echo ""
+          echo "=== _up_ contents ==="
+          ls -la "$APP_PATH/Contents/Resources/_up_/" || echo "_up_ not found"
+          echo ""
+          echo "=== Check for index.html in bundle ==="
+          if [ -f "$APP_PATH/Contents/Resources/_up_/index.html" ]; then
+            echo "✅ index.html found in bundle!"
+          else
+            echo "❌ index.html NOT in bundle!"
+            echo "Searching for index.html anywhere in bundle..."
+            find "$APP_PATH" -name "index.html" 2>/dev/null || echo "Not found anywhere"
+          fi
+
+      - name: Upload debug artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-arm64-app
+          path: src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Hablara.app
+          retention-days: 3
 
   publish:
     name: Publish Release
