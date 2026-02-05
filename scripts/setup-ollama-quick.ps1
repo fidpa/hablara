@@ -435,6 +435,15 @@ SYSTEM You are an expert in psychology, communication analysis, and logical reas
     # Use unique temp filename to avoid conflicts
     $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$(Get-Random).tmp"
 
+    # Validate path (prevent path traversal)
+    $canonicalPath = [System.IO.Path]::GetFullPath($modelfilePath)
+    $canonicalTemp = [System.IO.Path]::GetFullPath($env:TEMP)
+
+    if (-not $canonicalPath.StartsWith($canonicalTemp)) {
+        Write-Err "Path traversal detected in modelfile path"
+        return
+    }
+
     # Write without BOM (UTF8NoBOM) - Ollama can't parse BOM
     [System.IO.File]::WriteAllText($modelfilePath, $modelfileContent, [System.Text.UTF8Encoding]::new($false))
 

@@ -109,9 +109,23 @@ function Test-CommandExists {
 # Cleanup on error
 trap {
     Write-Err "Build failed - cleaning up partial artifacts"
-    if (Test-Path (Join-Path $BuildDir 'build')) {
-        Remove-Item -Recurse -Force (Join-Path $BuildDir 'build') -ErrorAction SilentlyContinue
+
+    # Safe cleanup with lock to prevent race conditions
+    $lockFile = Join-Path $BuildDir '.cleanup.lock'
+    try {
+        # Atomic directory creation as lock
+        $null = New-Item -ItemType Directory -Path $lockFile -ErrorAction Stop
+
+        $buildPath = Join-Path $BuildDir 'build'
+        if (Test-Path $buildPath) {
+            Remove-Item -Recurse -Force $buildPath -ErrorAction SilentlyContinue
+        }
+
+        Remove-Item $lockFile -ErrorAction SilentlyContinue
+    } catch {
+        # Lock already exists, another process is cleaning up
     }
+
     exit 2
 }
 
@@ -188,13 +202,27 @@ if (Test-Path $BuildDir) {
     Write-Info "Build directory exists, updating..."
     Push-Location $BuildDir
     try {
-        git pull --quiet
+        # Verify remote URL before pull (prevent supply chain attack)
+        $expectedRemote = "https://github.com/ggml-org/whisper.cpp.git"
+        $currentRemote = & git remote get-url origin 2>$null
+
+        if ($currentRemote -ne $expectedRemote) {
+            Write-Err "Unexpected git remote detected"
+            Write-Host "  Expected: $expectedRemote" -ForegroundColor Red
+            Write-Host "  Found:    $currentRemote" -ForegroundColor Red
+            Write-Info "Repository may be compromised - aborting"
+            exit 2
+        }
+
+        # Pull with SSL verification enabled
+        & git -c http.sslVerify=true pull --quiet
     } finally {
         Pop-Location
     }
 } else {
     Write-Info "Cloning whisper.cpp..."
-    git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git $BuildDir
+    # Clone with SSL verification
+    & git -c http.sslVerify=true clone --depth 1 https://github.com/ggml-org/whisper.cpp.git $BuildDir
 }
 
 # -----------------------------------------------------------------------------
@@ -282,6 +310,15 @@ try {
     # Model URL from configuration
     $modelUrl = "$ModelBaseUrl/ggml-$Model.bin"
     $modelFile = "models\ggml-$Model.bin"
+
+    # Validate model path (prevent path traversal)
+    $canonicalModelPath = [System.IO.Path]::GetFullPath($modelFile)
+    $canonicalModelsDir = [System.IO.Path]::GetFullPath((Join-Path $BuildDir "models"))
+
+    if (-not $canonicalModelPath.StartsWith($canonicalModelsDir)) {
+        Write-Err "Path traversal detected in model file: $modelFile"
+        exit 3
+    }
 
     # Create models directory
     if (-not (Test-Path 'models')) {
