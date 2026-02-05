@@ -214,6 +214,71 @@ Typen: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`
 - [ ] Dokumentation aktualisiert (falls zutreffend)
 - [ ] CHANGELOG.md aktualisiert
 
+## Dokumentations-Links prüfen
+
+Alle Pull Requests mit Änderungen an `.md`-Dateien triggern einen automatischen Link-Check.
+
+**Warum?** Defekte Links schaden der Benutzererfahrung, SEO und wirken unprofessionell.
+
+### Falls der Link-Check fehlschlägt
+
+1. **Workflow-Logs prüfen**: Gehen Sie zum [Actions Tab](https://github.com/fidpa/hablara/actions/workflows/links-check.yml) und schauen Sie sich die Details an.
+
+2. **Manuell verifizieren**: Ist der Link wirklich kaputt? Öffnen Sie ihn in Ihrem Browser.
+
+3. **False Positive?** Wenn der Link funktioniert, aber der Check fehlschlägt, fügen Sie ihn zur `.lycheeignore` hinzu:
+   ```bash
+   echo "^https://example\\.com/.*$" >> .lycheeignore
+   git add .lycheeignore
+   git commit -m "chore: ignoriere False Positive Link"
+   ```
+   **Wichtig:** Doppelte Backslashes für Shell-Escaping verwenden!
+
+4. **Echtes Problem?** Fixe den defekten Link oder entferne ihn aus der Dokumentation.
+
+### Fail-Threshold
+
+Der Link-Check schlägt **nur bei ≥5 defekten Links** fehl. 1-4 False Positives blockieren Ihren PR nicht.
+
+**Scheduled Check:** Täglich um 02:00 UTC läuft eine automatische Prüfung. Bei defekten Links wird ein GitHub Issue erstellt.
+
+### Wann zur .lycheeignore hinzufügen?
+
+**Hinzufügen wenn:**
+- Localhost-URLs (nur zur Laufzeit verfügbar)
+- Login-geschützte Seiten (401/403 erwartet)
+- Dynamische Badges (shields.io)
+- Crawler-Blocks (raw.githubusercontent.com)
+
+**NICHT hinzufügen wenn:**
+- Link ist wirklich kaputt (404, 500)
+- Tippfehler im URL
+- Domain existiert nicht mehr
+
+### Häufige False Positives
+
+Diese URLs können False Positives auslösen:
+
+- **Localhost**: `http://localhost:*` (nur zur Laufzeit verfügbar)
+- **Badges**: `https://img.shields.io/*` (dynamischer Content)
+- **API Keys**: `https://platform.openai.com/api-keys` (Login-Required)
+- **HuggingFace**: `https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/*` (Rate-Limiting)
+
+### Lokales Testing
+
+Vor dem Push können Sie Links lokal testen:
+
+```bash
+# Lychee installieren (einmalig)
+cargo install lychee
+
+# Alle Markdown-Dateien prüfen
+lychee --verbose --exclude-path 'docs-dev/' '**/*.md'
+
+# Mit Custom User-Agent (empfohlen)
+lychee --user-agent 'Mozilla/5.0' --verbose '**/*.md'
+```
+
 ## Fragen?
 
 - Starten Sie eine [Diskussion](https://github.com/fidpa/hablara/discussions)

@@ -10,6 +10,7 @@
 //! - `is_wayland_session()`: Detects Wayland vs X11 display server
 //! - `get_xdg_data_home()`: XDG data directory (`~/.local/share` fallback)
 //! - `get_xdg_config_home()`: XDG config directory (`~/.config` fallback)
+//! - `get_xdg_storage_path()`: XDG-compliant storage path for recordings
 //!
 //! # Roadmap
 //!
@@ -68,6 +69,14 @@ pub fn get_xdg_config_home() -> Result<PathBuf, String> {
     Ok(home.join(".config"))
 }
 
+/// XDG-compliant storage path for direct distribution.
+///
+/// Returns `$XDG_DATA_HOME/hablara/recordings/` (default: `~/.local/share/hablara/recordings/`)
+pub fn get_xdg_storage_path() -> Result<PathBuf, String> {
+    get_xdg_data_home()
+        .map(|p| p.join("hablara").join("recordings"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +132,23 @@ mod tests {
         std::env::remove_var("XDG_CONFIG_HOME");
         let path = get_xdg_config_home().unwrap();
         assert!(path.ends_with(".config"));
+    }
+
+    #[test]
+    fn test_get_xdg_storage_path() {
+        std::env::remove_var("XDG_DATA_HOME");
+        let result = get_xdg_storage_path();
+        assert!(result.is_ok());
+        let path = result.unwrap();
+        assert!(path.ends_with("hablara/recordings"));
+    }
+
+    #[test]
+    fn test_get_xdg_storage_path_with_custom_xdg() {
+        std::env::set_var("XDG_DATA_HOME", "/custom/data");
+        let result = get_xdg_storage_path();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), PathBuf::from("/custom/data/hablara/recordings"));
+        std::env::remove_var("XDG_DATA_HOME");
     }
 }

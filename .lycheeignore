@@ -1,0 +1,81 @@
+# Lychee Link Checker - Ignore Patterns
+# Dokumentation: https://github.com/lycheeverse/lychee
+
+# ============================================================================
+# 1. LOCALHOST / LOKALE APIS
+# ============================================================================
+# Ollama API (nur zur Laufzeit verfügbar)
+# Rationale: Diese URLs sind nur verfügbar wenn Ollama lokal läuft
+http://localhost:11434
+http://localhost:11434/*
+
+# Allgemeine localhost-URLs
+http://localhost:*
+http://127.0.0.1:*
+https://localhost:*
+https://127.0.0.1:*
+
+# ============================================================================
+# 2. DYNAMIC BADGES (False Positives)
+# ============================================================================
+# Shields.io Badges (dynamischer Content)
+# Rationale: Badge-URLs generieren dynamischen Content, werden aber von Lychee als statisch behandelt
+^https://img\.shields\.io/.*$
+
+# ============================================================================
+# 3. TEMPORÄRE DOKUMENTATION
+# ============================================================================
+# Interne Development-Logs (nicht für Endnutzer)
+# Rationale: docs-dev/ enthält interne Entwicklungs-Logs die nicht öffentlich sind
+docs-dev/
+docs-dev/**
+
+# ============================================================================
+# 4. RELEASES (Tag-abhängig, 404 vor Release)
+# ============================================================================
+# Release-Tags (existieren nur nach veröffentlichtem Release)
+# Rationale: Dokumentation referenziert zukünftige Release-URLs die noch nicht existieren
+^https://github\.com/fidpa/hablara/releases/tag/v.*$
+
+# ============================================================================
+# 5. EXTERNE SERVICES (Rate-Limiting)
+# ============================================================================
+# HuggingFace - Nur das spezifische Whisper-Modell (nicht alle)
+# Rationale: Rate-Limiting, 429 Responses bei zu vielen Requests
+^https://huggingface\.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/.*$
+
+# Git LFS (Download-URLs sind dynamisch)
+^https://git-lfs\.com/.*$
+
+# Ollama Downloads (wird in CI separat getestet)
+^https://ollama\.ai/download$
+^https://ollama\.ai/download/.*$
+
+# ============================================================================
+# 6. AUTHENTICATION-REQUIRED (401/403 erwartet)
+# ============================================================================
+# OpenAI API Keys (Login-Protected)
+# Rationale: Diese Seiten erfordern Login und geben 401 für Bots zurück
+# Impact: Niedrig - Nutzer wissen dass sie sich einloggen müssen
+^https://platform\.openai\.com/api-keys$
+^https://platform\.openai\.com/account/api-keys$
+
+# Anthropic API Keys (Login-Protected)
+^https://console\.anthropic\.com/settings/keys$
+^https://console\.anthropic\.com/account/keys$
+
+# ============================================================================
+# 7. SOCIAL MEDIA (Crawler-Block)
+# ============================================================================
+# LinkedIn (blockt Crawler)
+# Rationale: LinkedIn blockiert alle automatischen Crawler/Bots
+# Note: Nur hinzufügen wenn tatsächlich LinkedIn-Links in Docs existieren
+^https://www\.linkedin\.com/.*$
+^https://linkedin\.com/.*$
+
+# ============================================================================
+# 8. APPLE-SPEZIFISCH (Nur auf macOS verifizierbar)
+# ============================================================================
+# Mac App Store (Redirect ohne User-Agent)
+# Rationale: App Store Links funktionieren nur mit macOS-spezifischem User-Agent
+^https://apps\.apple\.com/.*$

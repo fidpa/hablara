@@ -58,7 +58,13 @@ ollama pull qwen2.5:7b
 
 ## 4. Aufnahmen werden nicht gespeichert
 
-**Symptom:** Keine Dateien in `~/Hablara/recordings/`
+**Symptom:** Keine Dateien im Aufnahme-Ordner
+
+**Speicherpfade (ab v1.0.4):**
+- macOS (Direct): `~/Library/Application Support/Hablara/recordings/`
+- macOS (App Store): `~/Documents/Hablara/recordings/`
+- Linux: `~/.local/share/hablara/recordings/`
+- Windows: `%LOCALAPPDATA%\Hablara\recordings\`
 
 **Lösungen:**
 
@@ -67,12 +73,20 @@ ollama pull qwen2.5:7b
 
 2. **Ordner nicht erreichbar:**
    ```bash
-   mkdir -p ~/Hablara/recordings/
+   # macOS (Direct)
+   mkdir -p ~/Library/Application\ Support/Hablara/recordings/
+
+   # Linux
+   mkdir -p ~/.local/share/hablara/recordings/
    ```
 
-3. **Berechtigungen fehlen:**
+3. **Berechtigungen prüfen:**
    ```bash
-   ls -la ~/Hablara/
+   # macOS
+   ls -la ~/Library/Application\ Support/Hablara/
+
+   # Linux
+   ls -la ~/.local/share/hablara/
    ```
 
 **Details:** [Aufnahmen verwalten](./STORAGE.md)
@@ -212,4 +226,4 @@ tccutil reset Microphone
 
 ---
 
-**Version:** 1.0.0
+**Version:** 1.0.4

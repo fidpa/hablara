@@ -151,10 +151,20 @@ fn test_storage_path_validation_rejects_path_traversal() {
 #[test]
 fn test_storage_path_validation_accepts_home_subdirectory() {
     // Use valid path under home directory
+    // Create the directory first so validate_storage_path can verify it
     let home = std::env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
     let valid_path = format!("{}/Hablara/recordings", home);
 
+    // Create test directory (cleanup at end)
+    let created = std::fs::create_dir_all(&valid_path).is_ok();
+
     let result = validate_storage_path(&valid_path);
+
+    // Cleanup: remove test directories if we created them
+    if created {
+        let _ = std::fs::remove_dir(format!("{}/Hablara/recordings", home));
+        let _ = std::fs::remove_dir(format!("{}/Hablara", home));
+    }
 
     assert!(
         result.is_ok(),

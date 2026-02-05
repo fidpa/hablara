@@ -1,0 +1,268 @@
+name: Link Check
+
+on:
+  # Täglich um 02:00 UTC
+  schedule:
+    - cron: '0 2 * * *'
+
+  # Bei PR-Änderungen an Markdown-Dateien
+  pull_request:
+    paths:
+      - '**.md'
+      - '.lycheeignore'
+      - '.github/workflows/links-check.yml'
+
+  # Manuelle Ausführung
+  workflow_dispatch:
+    inputs:
+      fail_threshold:
+        description: 'Fail threshold (number of broken links)'
+        required: false
+        default: '5'
+
+permissions:
+  contents: read
+  issues: write
+
+# Verhindere parallele Ausführungen
+concurrency:
+  group: link-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Restore Link Cache
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: lychee-cache-${{ runner.os }}-${{ hashFiles('**/*.md', '.lycheeignore') }}
+          restore-keys: |
+            lychee-cache-${{ runner.os }}-
+
+      - name: Run Lychee Link Checker
+        id: lychee
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: lycheeverse/lychee-action@v2.1.0
+        with:
+          args: >-
+            --cache
+            --max-cache-age 7d
+            --accept 200,204,206,301,302,307,308,410,429,451
+            --timeout 20
+            --max-retries 3
+            --exclude-path 'docs-dev/'
+            --exclude-mail
+            --exclude "https://raw.githubusercontent.com/${{ github.repository }}/.*"
+            --user-agent 'Mozilla/5.0 (compatible; HablaraLinkBot/1.0; +https://github.com/fidpa/hablara)'
+            --unique
+            --verbose
+            '**/*.md'
+          format: markdown
+          output: lychee-report.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Report Generated
+        if: always()
+        run: |
+          if [ ! -f lychee-report.md ]; then
+            echo "❌ ERROR: Lychee did not generate report file"
+            echo "## Link Check Failed" > lychee-report.md
+            echo "The link checker crashed or timed out." >> lychee-report.md
+            exit 0
+          fi
+
+      - name: Parse Results
+        id: parse
+        if: always()
+        run: |
+          # Extrahiere Anzahl der Broken Links aus dem Lychee-Output
+          BROKEN_COUNT=0
+
+          if [ -f lychee-report.md ]; then
+            # Suche nach "Broken: X" Pattern im Report
+            if grep -q "Broken:" lychee-report.md; then
+              BROKEN_COUNT=$(grep -oE 'Broken: [0-9]+' lychee-report.md | grep -oE '[0-9]+' || echo "0")
+            else
+              # Fallback: Zähle ✗ Symbole (unique wegen --unique flag)
+              BROKEN_COUNT=$(grep -c "✗" lychee-report.md || echo "0")
+            fi
+          fi
+
+          echo "broken_count=$BROKEN_COUNT" >> $GITHUB_OUTPUT
+          echo "📊 Gefundene Broken Links: $BROKEN_COUNT"
+
+      - name: PR Check - Fail on Threshold
+        if: github.event_name == 'pull_request'
+        run: |
+          BROKEN_COUNT="${{ steps.parse.outputs.broken_count }}"
+          THRESHOLD="${{ github.event.inputs.fail_threshold || '5' }}"
+
+          if [ "$BROKEN_COUNT" -ge "$THRESHOLD" ]; then
+            echo "❌ FAILED: $BROKEN_COUNT Broken Links gefunden (Threshold: ≥$THRESHOLD)"
+            echo ""
+            echo "Bitte überprüfe die defekten Links:"
+            cat lychee-report.md || echo "Keine Report-Datei gefunden"
+            exit 1
+          elif [ "$BROKEN_COUNT" -gt 0 ]; then
+            echo "⚠️  WARNING: $BROKEN_COUNT Broken Links gefunden (unter Threshold von $THRESHOLD)"
+            echo "PR wird nicht blockiert, aber bitte überprüfe die Links:"
+            cat lychee-report.md || echo "Keine Report-Datei gefunden"
+          else
+            echo "✅ Alle Links funktionieren!"
+          fi
+
+      - name: PR Check - Comment Results
+        if: github.event_name == 'pull_request' && steps.parse.outputs.broken_count > 0
+        uses: actions/github-script@v7
+        env:
+          BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
+          THRESHOLD: ${{ github.event.inputs.fail_threshold || '5' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const brokenCount = parseInt(process.env.BROKEN_COUNT) || 0;
+            const threshold = parseInt(process.env.THRESHOLD) || 5;
+            const emoji = brokenCount >= threshold ? '❌' : '⚠️';
+
+            let reportContent = '_(Keine Details verfügbar)_';
+            try {
+              reportContent = fs.readFileSync('lychee-report.md', 'utf8');
+            } catch (e) {
+              console.log('Report-Datei nicht gefunden');
+            }
+
+            const body = `${emoji} **Link Check Results**\n\n` +
+              `Found **${brokenCount}** broken links (threshold: ${threshold})\n\n` +
+              `<details>\n<summary>View Details</summary>\n\n\`\`\`\n` +
+              reportContent +
+              `\n\`\`\`\n</details>`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+      - name: Schedule Check - Create/Update Issue
+        if: github.event_name == 'schedule' && steps.parse.outputs.broken_count > 0
+        uses: actions/github-script@v7
+        env:
+          BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const brokenCount = parseInt(process.env.BROKEN_COUNT) || 0;
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const date = new Date().toISOString().split('T')[0];
+
+            // Lese Report-Datei
+            let reportContent = '_(Keine Details verfügbar)_';
+            try {
+              reportContent = fs.readFileSync('lychee-report.md', 'utf8');
+            } catch (e) {
+              console.log('Report-Datei nicht gefunden');
+            }
+
+            // Suche existierendes Issue mit Error-Handling
+            let existingIssue = null;
+            try {
+              const { data: issues } = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['broken-links', 'automated', 'documentation'],
+                state: 'open',
+                per_page: 100
+              });
+
+              if (issues.length > 1) {
+                console.warn(`Warning: Found ${issues.length} open issues, expected 1`);
+              }
+
+              existingIssue = issues[0];
+            } catch (error) {
+              console.error('Failed to list issues:', error);
+              // Fortfahren ohne existierendes Issue
+            }
+
+            const issueBody = `## 🔗 Broken Links gefunden (${date})
+
+**Anzahl:** ${brokenCount} defekte Links
+**Workflow:** [Link Check #${{ github.run_number }}](${runUrl})
+
+### Details
+
+\`\`\`
+${reportContent}
+\`\`\`
+
+---
+
+_Automatisch erstellt vom [Link Checker Workflow](${runUrl})_
+_Nächste Prüfung: Morgen 02:00 UTC_`;
+
+            try {
+              if (existingIssue) {
+                // Update existierendes Issue mit Kommentar
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existingIssue.number,
+                  body: `## 📅 Update ${date}\n\n${issueBody}`
+                });
+                console.log(`Issue #${existingIssue.number} aktualisiert`);
+              } else {
+                // Erstelle neues Issue
+                const newIssue = await github.rest.issues.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title: `🔗 Broken Links in Dokumentation gefunden`,
+                  body: issueBody,
+                  labels: ['broken-links', 'automated', 'documentation']
+                });
+                console.log(`Neues Issue #${newIssue.data.number} erstellt`);
+              }
+            } catch (error) {
+              console.error('Failed to create/update issue:', error);
+              throw error;
+            }
+
+      - name: Manual Run - Summary
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "ℹ️  Manuelle Ausführung - Nur Info, kein Fail"
+          echo ""
+          echo "📊 Broken Links: ${{ steps.parse.outputs.broken_count }}"
+          echo ""
+          if [ -f lychee-report.md ]; then
+            cat lychee-report.md
+          fi
+
+      - name: Job Summary
+        if: always()
+        run: |
+          echo "## 🔗 Link Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Broken Links:** ${{ steps.parse.outputs.broken_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f lychee-report.md ]; then
+            echo "<details><summary>Full Report</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat lychee-report.md >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+          fi

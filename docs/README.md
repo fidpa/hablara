@@ -1,7 +1,7 @@
 ---
 diataxis-type: reference
 status: production
-version: 1.0.1
+version: 1.0.4
 last_updated: 2026-02-05
 ---
 
@@ -100,7 +100,7 @@ docs/
 
 ---
 
-**Version**: 1.0.1
+**Version**: 1.0.4
 **Created**: 28. Januar 2026
 **Last Updated**: 5. Februar 2026
 **Status**: Production

@@ -8,10 +8,22 @@ Wie Sie Ihre Aufnahmen speichern, organisieren und exportieren.
 
 **Standard:** Aktiviert
 
-Alle Aufnahmen werden automatisch gespeichert mit vollständigen Metadaten:
+Alle Aufnahmen werden automatisch gespeichert mit vollständigen Metadaten.
 
+### Speicherpfade nach Plattform
+
+| Plattform | Build | Pfad |
+|-----------|-------|------|
+| **macOS** | App Store | `~/Documents/Hablara/recordings/` |
+| **macOS** | Direct | `~/Library/Application Support/Hablara/recordings/` |
+| **Linux** | Direct | `~/.local/share/hablara/recordings/` |
+| **Windows** | Direct | `%LOCALAPPDATA%\Hablara\recordings\` |
+
+> **Hinweis:** App Store Builds speichern in `~/Documents/`, damit Nutzer direkten Zugriff auf ihre Daten haben (Apple Guideline 2.4.5).
+
+**Beispiel-Struktur:**
 ```
-~/Hablara/recordings/
+recordings/
 ├── 2026-01-25_20-30-45_a1b2c3d4.wav   # 16kHz Mono WAV
 └── 2026-01-25_20-30-45_a1b2c3d4.json  # Metadaten
 ```
@@ -95,7 +107,7 @@ Im Settings-Panel sichtbar:
 - **Aufnahmen:** Anzahl gespeicherter Recordings
 - **Speicher:** Gesamtgröße in KB/MB
 - **Dauer:** Gesamtdauer aller Aufnahmen
-- **Pfad:** `~/Hablara/recordings/`
+- **Pfad:** Plattformspezifisch (siehe oben)
 
 ---
 
@@ -105,23 +117,50 @@ Im Settings-Panel sichtbar:
 
 **Prüfen:**
 1. Settings → Speicher → "Automatische Speicherung" aktiviert?
-2. Pfad erreichbar? `ls -la ~/Hablara/recordings/`
+2. Pfad erreichbar? (siehe Plattform-Pfade oben)
 
-**Lösung:**
-- Ordner erstellen: `mkdir -p ~/Hablara/recordings/`
-- Berechtigungen prüfen
+**Lösung nach Plattform:**
+
+```bash
+# macOS (Direct Distribution)
+ls -la ~/Library/Application\ Support/Hablara/recordings/
+
+# Linux
+ls -la ~/.local/share/hablara/recordings/
+
+# macOS (App Store) / Windows
+# Pfad im Finder/Explorer prüfen: Documents/Hablara/recordings/
+```
 
 ### Speicherort nicht erreichbar
 
-**Prüfen:**
+**Ordner manuell erstellen:**
 ```bash
-ls -la ~/Hablara/
-mkdir -p ~/Hablara/recordings/
+# macOS (Direct)
+mkdir -p ~/Library/Application\ Support/Hablara/recordings/
+
+# Linux
+mkdir -p ~/.local/share/hablara/recordings/
 ```
 
 ### Auto-Cleanup zu aggressiv
 
 **Lösung:** Settings → "Maximale Aufnahmen" erhöhen (100 → 200)
+
+### Migration von älteren Versionen
+
+Ab Version 1.0.4 werden Aufnahmen in plattform-nativen Verzeichnissen gespeichert statt in `~/Hablara/recordings/`.
+
+**Automatische Migration:** Beim ersten Start werden bestehende Aufnahmen automatisch migriert.
+
+**Manuelle Migration (falls nötig):**
+```bash
+# macOS (Direct) - von alt nach neu
+mv ~/Hablara/recordings/* ~/Library/Application\ Support/Hablara/recordings/
+
+# Linux - von alt nach neu
+mv ~/Hablara/recordings/* ~/.local/share/hablara/recordings/
+```
 
 ---
 
@@ -132,4 +171,4 @@ mkdir -p ~/Hablara/recordings/
 
 ---
 
-**Version:** 1.0.0
+**Version:** 1.0.4

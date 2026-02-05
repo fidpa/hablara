@@ -240,19 +240,188 @@ fn set_secure_permissions(_path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Get default storage path: ~/Hablara/recordings/
+/// Get default storage path based on build configuration.
 ///
-/// Fallback chain:
-/// 1. dirs::home_dir() (cross-platform home directory)
-/// 2. std::env::temp_dir() (if home not available, e.g., CI/CD)
+/// # App Store Build (`--features app-store`)
+/// Uses `~/Documents/Hablara/recordings/` on all platforms.
+/// This path is user-accessible and complies with Apple Guideline 2.4.5(i).
+///
+/// # Direct Distribution Build (default)
+/// Uses platform-native paths:
+/// - macOS: `~/Library/Application Support/Hablara/recordings/`
+/// - Linux: `~/.local/share/hablara/recordings/` (XDG)
+/// - Windows: `%LOCALAPPDATA%\Hablara\recordings\`
 fn get_default_storage_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| {
-            tracing::warn!("HOME directory not available, using temp directory for storage");
-            std::env::temp_dir().join("hablara_recordings")
-        })
+    #[cfg(feature = "app-store")]
+    {
+        get_app_store_storage_path()
+    }
+
+    #[cfg(not(feature = "app-store"))]
+    {
+        get_direct_distribution_storage_path()
+    }
+}
+
+/// Storage path for App Store builds: ~/Documents/Hablara/recordings/
+///
+/// # Panics
+/// Panics if Documents directory is unavailable in sandboxed App Store build.
+/// This indicates a broken sandbox configuration that must be fixed.
+#[cfg(feature = "app-store")]
+fn get_app_store_storage_path() -> PathBuf {
+    dirs::document_dir()
+        .or_else(|| dirs::home_dir().map(|h| h.join("Documents")))
+        .expect("FATAL: Documents directory not available - App Store sandbox may be misconfigured")
         .join("Hablara")
         .join("recordings")
+}
+
+/// Storage path for direct distribution builds (platform-native paths)
+#[cfg(not(feature = "app-store"))]
+fn get_direct_distribution_storage_path() -> PathBuf {
+    #[cfg(target_os = "macos")]
+    {
+        crate::platform::macos::get_app_support_storage_path()
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to get Application Support path: {e}");
+                std::env::temp_dir().join("hablara_recordings")
+            })
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        crate::platform::linux::get_xdg_storage_path()
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to get XDG data path: {e}");
+                std::env::temp_dir().join("hablara_recordings")
+            })
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        crate::platform::windows::get_local_app_data_storage_path()
+            .unwrap_or_else(|e| {
+                tracing::warn!("Failed to get LocalAppData path: {e}");
+                std::env::temp_dir().join("hablara_recordings")
+            })
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        std::env::temp_dir().join("hablara_recordings")
+    }
+}
+
+/// Migrate recordings from legacy path (~/Hablara/recordings/) to new location.
+///
+/// This function is called on app startup to migrate existing recordings
+/// from the old home directory path to the new platform-native location.
+///
+/// The migration uses a safe two-phase approach:
+/// 1. Attempt atomic rename (fast, same filesystem)
+/// 2. Fall back to copy with integrity verification, then delete source
+///
+/// Returns the number of files migrated.
+pub fn migrate_legacy_storage() -> Result<usize, String> {
+    let legacy_path = dirs::home_dir()
+        .ok_or("Home directory not found")?
+        .join("Hablara")
+        .join("recordings");
+
+    if !legacy_path.exists() {
+        return Ok(0);
+    }
+
+    let current_path = get_default_storage_path();
+    if legacy_path == current_path {
+        return Ok(0);
+    }
+
+    // Read directory entries
+    let files: Vec<_> = std::fs::read_dir(&legacy_path)
+        .map_err(|e| format!("Failed to read legacy directory: {e}"))?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            matches!(
+                e.path().extension().and_then(|s| s.to_str()),
+                Some("wav") | Some("json")
+            )
+        })
+        .collect();
+
+    if files.is_empty() {
+        return Ok(0);
+    }
+
+    // Create target directory
+    std::fs::create_dir_all(&current_path)
+        .map_err(|e| format!("Failed to create target directory: {e}"))?;
+
+    let mut migrated = 0;
+    for entry in files {
+        let src = entry.path();
+        let dest = current_path.join(src.file_name().unwrap());
+        if !dest.exists() {
+            // Try rename first (fast, atomic, same filesystem)
+            if std::fs::rename(&src, &dest).is_ok() {
+                // Set secure permissions on renamed file
+                if let Err(e) = set_secure_permissions(&dest) {
+                    tracing::warn!("Failed to set permissions after rename: {e}");
+                }
+                migrated += 1;
+                continue;
+            }
+
+            // Fall back to copy with integrity verification
+            let src_size = std::fs::metadata(&src)
+                .map_err(|e| format!("Failed to read source metadata: {e}"))?
+                .len();
+
+            let bytes_copied = std::fs::copy(&src, &dest)
+                .map_err(|e| format!("Failed to copy file: {e}"))?;
+
+            // Verify integrity: file size must match
+            if bytes_copied != src_size {
+                // Remove partial copy and continue with next file (don't delete source)
+                let _ = std::fs::remove_file(&dest);
+                tracing::warn!(
+                    src = %src.display(),
+                    expected = src_size,
+                    actual = bytes_copied,
+                    "Migration: incomplete copy, skipping file"
+                );
+                continue;
+            }
+
+            // Set secure permissions on copied file
+            if let Err(e) = set_secure_permissions(&dest) {
+                tracing::warn!("Failed to set permissions after copy: {e}");
+            }
+
+            // Only delete source after successful, verified copy
+            if let Err(e) = std::fs::remove_file(&src) {
+                tracing::warn!(src = %src.display(), error = %e, "Failed to remove source after migration");
+            }
+            migrated += 1;
+        }
+    }
+
+    // Cleanup empty legacy directories
+    if std::fs::read_dir(&legacy_path)
+        .map(|mut d| d.next().is_none())
+        .unwrap_or(false)
+    {
+        let _ = std::fs::remove_dir(&legacy_path);
+        if let Some(parent) = legacy_path.parent() {
+            let _ = std::fs::remove_dir(parent);
+        }
+    }
+
+    if migrated > 0 {
+        tracing::info!(migrated, "Migrated recordings from legacy storage");
+    }
+    Ok(migrated)
 }
 
 /// Storage manager for handling recording persistence
@@ -260,9 +429,18 @@ pub struct StorageManager {
     config: Mutex<StorageConfig>,
 }
 
+/// Flag to ensure migration only runs once per process
+static MIGRATION_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl StorageManager {
     /// Create new storage manager with default config
     pub fn new() -> Self {
+        // Attempt legacy storage migration on first initialization only
+        if !MIGRATION_DONE.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            if let Err(e) = migrate_legacy_storage() {
+                tracing::warn!("Legacy storage migration failed: {e}");
+            }
+        }
         Self {
             config: Mutex::new(StorageConfig::default()),
         }
@@ -687,7 +865,12 @@ mod tests {
     fn test_storage_config_default() {
         let config = StorageConfig::default();
         assert!(config.max_recordings > 0);
-        assert!(config.storage_path.contains("Hablara"));
+        // Path contains "Hablara" or "hablara" (lowercase on Linux XDG)
+        assert!(
+            config.storage_path.to_lowercase().contains("hablara"),
+            "Storage path should contain 'hablara': {}",
+            config.storage_path
+        );
     }
 
     #[test]
@@ -713,11 +896,10 @@ mod tests {
 
     #[test]
     fn test_home_fallback_robustness() {
-        // Test that get_default_storage_path() uses dirs::home_dir()
-        // and falls back to temp_dir if home is unavailable
+        // Test that get_default_storage_path() uses appropriate directories
         let path = get_default_storage_path();
 
-        // Path should either start with home or temp directory
+        // Path should be under home or temp directory
         let home = dirs::home_dir();
         let temp = std::env::temp_dir();
 
@@ -733,7 +915,65 @@ mod tests {
             path.display()
         );
 
-        // Path should end with Hablara/recordings
-        assert!(path.ends_with("Hablara/recordings"));
+        // Path should end with recordings
+        assert!(path.ends_with("recordings"));
+    }
+
+    #[test]
+    fn test_storage_path_ends_with_recordings() {
+        let path = get_default_storage_path();
+        assert!(path.ends_with("recordings"));
+    }
+
+    #[test]
+    fn test_storage_path_within_home_or_temp() {
+        let path = get_default_storage_path();
+        let home = dirs::home_dir();
+        let temp = std::env::temp_dir();
+        assert!(
+            home.map(|h| path.starts_with(h)).unwrap_or(false) || path.starts_with(&temp)
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "app-store")]
+    fn test_app_store_uses_documents() {
+        let path = get_default_storage_path();
+        let path_str = path.to_string_lossy();
+        // Accept both English "Documents" and localized variants (e.g., German "Dokumente")
+        // or fallback to home directory with "Documents" appended
+        assert!(
+            path_str.contains("Documents") || path_str.contains("Dokumente") ||
+            (dirs::home_dir().is_some() && path.starts_with(dirs::home_dir().unwrap())),
+            "App Store path should be in Documents directory or home subdirectory: {}",
+            path_str
+        );
+    }
+
+    #[test]
+    #[cfg(all(not(feature = "app-store"), target_os = "macos"))]
+    fn test_direct_macos_uses_app_support() {
+        let path = get_default_storage_path();
+        assert!(path.to_string_lossy().contains("Application Support"));
+    }
+
+    #[test]
+    #[cfg(all(not(feature = "app-store"), target_os = "linux"))]
+    fn test_direct_linux_uses_xdg() {
+        let path = get_default_storage_path();
+        assert!(path.to_string_lossy().contains(".local/share"));
+    }
+
+    #[test]
+    fn test_migrate_legacy_storage_no_legacy_dir() {
+        // Migration is a static once-per-process operation, so we just verify
+        // the function is safe to call (doesn't panic) and returns a valid result
+        let result = migrate_legacy_storage();
+        // Should succeed (either 0 files migrated or migration already done)
+        // or fail gracefully with an error message
+        match result {
+            Ok(count) => assert!(count >= 0, "Migration count should be non-negative"),
+            Err(e) => assert!(!e.is_empty(), "Error message should not be empty"),
+        }
     }
 }

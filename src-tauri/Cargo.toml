@@ -3,7 +3,7 @@
 
 [package]
 name = "hablara"
-version = "1.0.3"
+version = "1.0.4"
 description = "Hablará - Desktop voice recording with AI-powered transcription and psychological enrichment"
 authors = ["Marc Allgeier"]
 license = "MIT"
