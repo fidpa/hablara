@@ -74,7 +74,7 @@ docs/
 - [Aufnahme-Qualität optimieren](./guides/RECORDING_QUALITY.md) - LED-Meter interpretieren, Mikrofon-Einstellungen, Speech Ratio
 - [Aufnahmen verwalten](./guides/STORAGE.md) - Auto-Save, RecordingsLibrary, WAV-Export
 - [FAQ](./guides/FAQ.md) - 10 häufigste Probleme und Lösungen
-- [Linux Troubleshooting](./guides/LINUX_TROUBLESHOOTING.md) - Ubuntu 24.04 Installation, Audio, Hotkeys, Ollama, Whisper
+- [Linux Troubleshooting](./guides/LINUX_TROUBLESHOOTING.md) - Ubuntu 20.04+, .deb/.rpm Installation, AppImage, Audio, Hotkeys
 
 ---
 

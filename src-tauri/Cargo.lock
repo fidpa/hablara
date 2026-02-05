@@ -1802,6 +1802,7 @@ dependencies = [
  "futures",
  "hound",
  "once_cell",
+ "open",
  "regex",
  "rubato",
  "serde",

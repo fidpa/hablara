@@ -270,6 +270,8 @@ jobs:
       # ========================================
       - name: Build Tauri app
         run: pnpm tauri build --target universal-apple-darwin --bundles app
+        env:
+          NEXT_PUBLIC_APP_STORE: "true"
 
       - name: Verify build and patch Info.plist
         run: |

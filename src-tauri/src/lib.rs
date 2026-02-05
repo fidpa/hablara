@@ -19,8 +19,15 @@ mod vad;
 /// - Linux: Wayland detection, XDG Base Directory paths
 mod platform;
 
-use tauri::Manager;
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::{Emitter, Manager};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
+// Menu item IDs as constants to prevent typos
+const MENU_OPEN_SETTINGS: &str = "open_settings";
+const MENU_HELP_WEBSITE: &str = "help_website";
+const MENU_HELP_SHORTCUTS: &str = "help_shortcuts";
+const MENU_HELP_FEEDBACK: &str = "help_feedback";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -96,6 +103,95 @@ pub fn run() {
 
             app.manage(native_audio_state);
 
+            // Build custom application menu
+            // Settings menu item (emits event to frontend)
+            let settings_item = MenuItemBuilder::new("Einstellungen...")
+                .id(MENU_OPEN_SETTINGS)
+                .accelerator("CmdOrCtrl+,")
+                .build(app)?;
+
+            // Help menu items
+            let help_website = MenuItemBuilder::new("Hablará Website")
+                .id(MENU_HELP_WEBSITE)
+                .build(app)?;
+
+            let help_shortcuts = MenuItemBuilder::new("Tastaturkürzel")
+                .id(MENU_HELP_SHORTCUTS)
+                .accelerator("CmdOrCtrl+?")
+                .build(app)?;
+
+            let help_feedback = MenuItemBuilder::new("Feedback geben...")
+                .id(MENU_HELP_FEEDBACK)
+                .build(app)?;
+
+            let help_menu = SubmenuBuilder::new(app, "Hilfe")
+                .item(&help_shortcuts)
+                .separator()
+                .item(&help_website)
+                .item(&help_feedback)
+                .build()?;
+
+            // Platform-specific menu setup
+            #[cfg(target_os = "macos")]
+            {
+                // macOS: Include app menu with standard items + Settings (⌘,)
+                let app_menu = SubmenuBuilder::new(app, "Hablará")
+                    .about(None)
+                    .separator()
+                    .item(&settings_item)
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .quit()
+                    .build()?;
+
+                let edit_menu = SubmenuBuilder::new(app, "Bearbeiten")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+
+                let window_menu = SubmenuBuilder::new(app, "Fenster")
+                    .minimize()
+                    .separator()
+                    .close_window()
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&app_menu)
+                    .item(&edit_menu)
+                    .item(&window_menu)
+                    .item(&help_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                // Windows/Linux: File menu with Settings + Help menu
+                let file_menu = SubmenuBuilder::new(app, "Datei")
+                    .item(&settings_item)
+                    .separator()
+                    .quit()
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .item(&file_menu)
+                    .item(&help_menu)
+                    .build()?;
+
+                app.set_menu(menu)?;
+            }
+
             #[cfg(debug_assertions)]
             {
                 // DevTools available via right-click → "Inspect Element"
@@ -104,6 +200,36 @@ pub fn run() {
             }
 
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            let event_id = event.id().as_ref();
+            match event_id {
+                id if id == MENU_HELP_WEBSITE => {
+                    // Open Hablará website in default browser
+                    if let Err(e) = open::that("https://www.hablara.de") {
+                        tracing::error!("Failed to open help website: {}", e);
+                    }
+                }
+                id if id == MENU_HELP_FEEDBACK => {
+                    // Open GitHub Issues for feedback
+                    if let Err(e) = open::that("https://github.com/fidoriel/hablara/issues") {
+                        tracing::error!("Failed to open feedback page: {}", e);
+                    }
+                }
+                id if id == MENU_OPEN_SETTINGS => {
+                    // Emit event to frontend to open Settings panel
+                    if let Err(e) = app.emit("menu:open-settings", ()) {
+                        tracing::error!("Failed to emit open-settings event: {}", e);
+                    }
+                }
+                id if id == MENU_HELP_SHORTCUTS => {
+                    // Emit event to frontend to show shortcuts modal
+                    if let Err(e) = app.emit("menu:show-shortcuts", ()) {
+                        tracing::error!("Failed to emit show-shortcuts event: {}", e);
+                    }
+                }
+                _ => {}
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::start_recording,

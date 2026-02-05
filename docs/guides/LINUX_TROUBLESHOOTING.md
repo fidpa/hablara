@@ -1,8 +1,13 @@
-# Ubuntu 24.04 LTS - Troubleshooting Guide
+# Linux Troubleshooting Guide
 
 ## Übersicht
 
-Dieser Guide behandelt häufige Probleme bei der Installation und Nutzung von Hablará auf Ubuntu 24.04 LTS.
+Dieser Guide behandelt häufige Probleme bei der Installation und Nutzung von Hablará auf Linux (Ubuntu 20.04+, Fedora, openSUSE).
+
+**Unterstützte Formate:**
+- `.deb` - Debian/Ubuntu (empfohlen)
+- `.rpm` - Fedora/RHEL/openSUSE
+- `.AppImage` - Universal (alle Distributionen)
 
 ---
 

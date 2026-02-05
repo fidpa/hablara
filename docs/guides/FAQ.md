@@ -210,6 +210,50 @@ tccutil reset Microphone
 
 ---
 
+## 11. Linux: AppImage startet nicht
+
+**Symptom:** `./Hablara_*.AppImage` zeigt "FUSE error" oder startet nicht
+
+**Lösungen:**
+
+```bash
+# 1. Ausführbar machen
+chmod +x Hablara_*.AppImage
+
+# 2. FUSE installieren (Ubuntu 22.04+)
+sudo apt install libfuse2t64
+
+# 3. Alternativ: Ohne FUSE extrahieren
+./Hablara_*.AppImage --appimage-extract
+./squashfs-root/AppRun
+```
+
+**Details:** [Linux Troubleshooting](./LINUX_TROUBLESHOOTING.md)
+
+---
+
+## 12. Linux: Hotkeys funktionieren nicht (Wayland)
+
+**Symptom:** `Ctrl+Shift+D` löst keine Aufnahme aus
+
+**Grund:** Wayland blockiert globale Hotkeys aus Sicherheitsgründen.
+
+**Lösungen:**
+
+1. **X11-Session verwenden (empfohlen):**
+   - Beim Login: Zahnrad-Symbol → "Ubuntu on Xorg" wählen
+
+2. **Session prüfen:**
+   ```bash
+   echo $XDG_SESSION_TYPE
+   # wayland → Hotkeys nicht möglich
+   # x11 → Hotkeys funktionieren
+   ```
+
+3. **Alternative:** Start-Button in der App verwenden
+
+---
+
 ## Weitere Hilfe
 
 **Kontakt:** Siehe [Support & Kontakt](../legal/SUPPORT.md)

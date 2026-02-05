@@ -3,8 +3,8 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/fidpa/hablara/releases)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/fidpa/hablara/releases)
+[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)][releases]
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 
 Desktop-App für Selbstreflexion mit Spracherkennung und KI-gestützter Sprachanalyse.
@@ -32,24 +32,24 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 | Plattform | Status | Architektur | Hinweise |
 |----------|--------|--------------|-------|
-| **macOS** | ✅ Production | ARM64 (Apple Silicon) | MLX-Whisper verfügbar |
-| **macOS** | ✅ Production | x86_64 (Intel) | Nur whisper.cpp |
-| **Windows** | ✅ Production | x86_64 | whisper.cpp CPU, kein MLX, WASAPI Audio |
-| **Linux** | 📋 Geplant | x86_64 | Primär Ubuntu Desktop |
+| **macOS** | ✅ Produktion | ARM64 (Apple Silicon) | MLX-Whisper verfügbar |
+| **macOS** | ✅ Produktion | x86_64 (Intel) | Nur whisper.cpp |
+| **Windows** | ✅ Produktion | x86_64 | whisper.cpp CPU, kein MLX, WASAPI Audio |
+| **Linux** | ✅ Produktion | x86_64 | Ubuntu 20.04+, .deb/.rpm |
 
 > **Hinweis:** macOS (ARM64) ist die primäre Entwicklungsplattform.
 
 ### Feature-Verfügbarkeit nach Plattform
 
-| Feature | macOS ARM64 | macOS x64 | Windows x64 |
-|---------|-------------|-----------|-------------|
-| whisper.cpp | ✅ | ✅ | ✅ |
-| MLX-Whisper | ✅ | ❌ | ❌ |
-| Ollama LLM | ✅ | ✅ | ✅ |
-| OpenAI/Anthropic | ✅ | ✅ | ✅ |
-| Global Hotkey | ✅ | ✅ | ✅ (Ctrl+Shift+D) |
-| Native Audio | ✅ (CoreAudio) | ✅ (CoreAudio) | ✅ (WASAPI) |
-| API Key Storage | ✅ (Keychain) | ✅ (Keychain) | ✅ (Credential Manager) |
+| Feature | macOS ARM64 | macOS x64 | Windows x64 | Linux x64 |
+|---------|-------------|-----------|-------------|-----------|
+| whisper.cpp | ✅ | ✅ | ✅ | ✅ |
+| MLX-Whisper | ✅ | ❌ | ❌ | ❌ |
+| Ollama LLM | ✅ | ✅ | ✅ | ✅ |
+| OpenAI/Anthropic | ✅ | ✅ | ✅ | ✅ |
+| Global Hotkey | ✅ | ✅ | ✅ | ✅ |
+| Native Audio | CoreAudio | CoreAudio | WASAPI | ALSA/PipeWire |
+| API Key Storage | Keychain | Keychain | Credential Manager | Secret Service |
 
 ---
 
@@ -63,7 +63,7 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 **Voraussetzungen:** macOS 10.15+ · 10 GB freier Speicher
 
-**Download:** [GitHub Releases](https://github.com/fidpa/hablara/releases) – Universal DMG (1.3 GB) | Apple Silicon DMG (1.2 GB)
+**Download:** [GitHub Releases][releases] – Universal DMG (1.3 GB) | Apple Silicon DMG (1.2 GB)
 
 #### 1️⃣ Hablará installieren
 - DMG öffnen → `Hablará.app` in `Programme` ziehen
@@ -91,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Voraussetzungen:** Windows 10/11 (x64) · 10 GB freier Speicher
 
-**Download:** [GitHub Releases](https://github.com/fidpa/hablara/releases) – NSIS Installer (1.1 GB, empfohlen) | MSI (1.2 GB)
+**Download:** [GitHub Releases][releases] – NSIS Installer (1.1 GB, empfohlen) | MSI (1.2 GB)
 
 #### 1️⃣ Hablará installieren
 - `.exe` oder `.msi` herunterladen und ausführen
@@ -183,9 +183,9 @@ Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 - **Persistente Speicherung** – Alle Aufnahmen mit Metadaten automatisch gespeichert
 - **Chat-Export** – 5 Formate (Markdown/TXT/PDF/HTML/DOCX) mit Export aller Metadaten
 - **PDF Export** – Einzelne Aufnahmen als PDF exportieren (10 Sektionen: Transkript + alle Analysen)
-- **Sichere API Key Speicherung** – OS-native Verschlüsselung (Keychain/Credential Manager)
+- **Sichere API Key Speicherung** – OS-native Verschlüsselung (Keychain/Credential Manager/Secret Service)
 - **Bundle-Size-Optimierung** – INT8-Quantization (-75% Model Size), DMG: 1.3 GB (macOS), NSIS: 1.1 GB (Windows)
-- **Native OS-Integration** – API Keys im System-Keystore (macOS Keychain / Windows Credential Manager), Window State Persistence
+- **Native OS-Integration** – API Keys im System-Keystore (macOS Keychain / Windows Credential Manager / Linux Secret Service), Window State Persistence
 - **Robustheit** – 4 Error Boundaries isolieren Fehler auf Komponentenebene (Chat-Crash ≠ App-Crash)
 
 <details>
@@ -333,9 +333,9 @@ Jetzt weiß ich, wie ich das angehen will."
 
 #### Security & Privacy
 
-**Warum Keychain / Credential Manager statt localStorage?**
+**Warum Keychain / Credential Manager / Secret Service statt localStorage?**
 - localStorage: XSS-anfällig, Klartext auf Disk
-- Keychain: AES-256-GCM (macOS), DPAPI (Windows), Zero Plaintext
+- OS-native: AES-256-GCM (macOS Keychain), DPAPI (Windows), D-Bus Secret Service (Linux), Zero Plaintext
 
 **Warum DSGVO Art. 6 statt Art. 9?**
 - Art. 9 erfordert DPIA + MDR-Zertifizierung (~50.000 EUR) – unverhältnismäßig für Selbstreflexions-Tool
@@ -493,15 +493,44 @@ Hablará unterstützt drei LLM-Anbieter:
 **Ja**, mit OpenAI/Anthropic API-Key (Cloud-basiert).
 
 ### Funktioniert es auf Windows/Linux?
-**Windows:** Ja, Production-Version verfügbar (x64, whisper.cpp CPU). Download im [GitHub Releases](https://github.com/fidpa/hablara/releases).
-**Linux:** Noch nicht. Geplant für Q2 2026.
+**Windows:** Ja, Produktionsversion verfügbar (x64, whisper.cpp CPU). Download im [GitHub Releases][releases].
+**Linux:** Ja, Produktionsversion verfügbar (x64, Ubuntu 20.04+). Download: .deb oder .rpm im [GitHub Releases][releases].
 
 ### Wie groß ist das Ollama-Model?
 **6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
 
 ### Wo speichert Hablará Daten?
-**macOS/Linux:** `~/Hablara/recordings/`
-**Windows:** `%USERPROFILE%\Hablara\recordings\` (z.B. `C:\Users\Name\Hablara\recordings\`)
+
+**macOS:**
+```
+~/Library/Application Support/Hablara/recordings/
+```
+
+**Linux:**
+```
+~/.local/share/hablara/recordings/
+```
+(XDG_DATA_HOME Standard)
+
+**Windows:**
+```
+%LOCALAPPDATA%\Hablara\recordings\
+```
+
+**Migration:** Ab v1.0.4 werden alte Aufnahmen aus `~/Hablara/recordings/` automatisch an die neuen Speicherorte migriert.
+
+**Details:** Siehe [STORAGE.md](docs/guides/STORAGE.md)
+
+### Was ist der Unterschied zwischen App Store und Direct Distribution?
+
+| Feature | Direct (GitHub) | App Store |
+|---------|-----------------|-----------|
+| **Hotkey** | ✅ `Ctrl+Shift+D` | ❌ Nicht verfügbar |
+| **Ollama Setup** | Terminal-Befehl | App oder Cloud-API |
+| **Speicherort** | `Application Support/` | `Documents/` |
+| **Updates** | Manuell | Automatisch |
+
+**Empfehlung:** Direct Distribution für volle Feature-Unterstützung (Global Hotkeys).
 
 ### Kann ich alte Aufnahmen ansehen und deren Analysen exportieren?
 **Ja** – Folder-Icon in der Kopfzeile → Aufnahmen-Verzeichnis öffnet sich.
@@ -543,7 +572,7 @@ Hablará unterstützt drei LLM-Anbieter:
 │  │  • Audio Analysis (12 Features)                           │  │
 │  │  • Storage Manager (JSON Dateien)                         │  │
 │  │  • whisper.cpp Integration (Sidecar)                      │  │
-│  │  • API Key Security (Keychain / Credential Manager)       │  │
+│  │  • API Key Security (native Keystores)                    │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -625,7 +654,7 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 │          v                                   v            │
 │   ┌─────────────┐                     ┌─────────────┐     │
 │   │  Speicher   │<--------------------│   Analyse   │     │
-│   │ ~/Hablara/  │                     │  Ergebnis   │     │
+│   │   (lokal)   │                     │  Ergebnis   │     │
 │   └─────────────┘                     └─────────────┘     │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -637,7 +666,7 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 | **Rechtliche Basis** | DSGVO Art. 6(1)(a) – Einwilligung |
 | **Datenklassifizierung** | Nicht-sensible personenbezogene Daten |
 | **Zweckbindung** | Audio ausschließlich für Transkription & Sprachanalyse |
-| **Speicherort** | `~/Hablara/recordings/` (macOS/Linux) bzw. `%USERPROFILE%\Hablara\recordings\` (Windows) |
+| **Speicherort** | Plattformspezifisch (siehe [STORAGE.md](docs/guides/STORAGE.md)) |
 | **Cloud-Option** | Nur mit expliziter Einwilligung (OpenAI/Anthropic) |
 | **Auto-Cleanup** | Konfigurierbar (Standard: 25-500 Aufnahmen) |
 
@@ -645,7 +674,7 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 
 | Maßnahme | Implementierung |
 |----------|-----------------|
-| **API Key Verschlüsselung** | macOS Keychain (AES-256-GCM) / Windows Credential Manager (DPAPI) |
+| **API Key Verschlüsselung** | macOS Keychain (AES-256-GCM) / Windows Credential Manager (DPAPI) / Linux Secret Service (D-Bus) |
 | **Keine Cloud-Pflicht** | whisper.cpp + Ollama vollständig offline |
 | **Datenlöschung** | "Alle löschen"-Button, konfigurierbare Aufbewahrung |
 | **Open-Source** | Transparenz durch offenen Code |
@@ -666,15 +695,15 @@ Weitere Informationen: [Datenschutzerklärung](https://www.hablara.de/datenschut
 │           └────────────┘  └──────────────┘                │
 │                                                           │
 │  Storage: ┌─────────────────────────────────────────┐     │
-│           │ Lokal: ~/Hablara/ (%USERPROFILE% Win)   │     │
-│           │ API Keys: Keychain / Credential Manager │     │
+│           │ Lokal: Plattformspezifische Pfade       │     │
+│           │ API Keys: Keychain/Credential/Secret    │     │
 │           └─────────────────────────────────────────┘     │
 │                                                           │
 └───────────────────────────────────────────────────────────┘
 ```
 
 - **Keine Cloud-Datenbank** – Keine Remote-Angriffsfläche, alle Daten lokal
-- **Verschlüsselte Credentials** – API Keys nur in Keychain / Credential Manager, niemals Klartext
+- **Verschlüsselte Credentials** – API Keys nur in OS-native Keystores (Keychain/Credential Manager/Secret Service), niemals Klartext
 - **Input Validation** – Alle User-Eingaben via Zod Schema validiert
 - **XSS Protection** – LLM-Output wird vor Rendering sanitized
 - **Safety Filter** – Blockiert problematische LLM-Outputs
@@ -710,7 +739,7 @@ Hablará dient der **Selbstreflexion** und ist kein medizinisches Produkt:
 
 ## Mitwirken
 
-Beiträge sind willkommen! Siehe [GitHub Issues](https://github.com/fidpa/hablara/issues) für offene Aufgaben.
+Beiträge sind willkommen! Siehe [GitHub Issues][issues] für offene Aufgaben.
 
 - Bug-Reports und Feature-Requests via Issues
 - Pull Requests gerne gegen `main` Branch
@@ -723,4 +752,10 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.3
+**Autor:** Marc Allgeier | **Version:** 1.0.4
+
+---
+
+<!-- Link-Definitionen -->
+[releases]: https://github.com/fidpa/hablara/releases
+[issues]: https://github.com/fidpa/hablara/issues

@@ -1,18 +1,35 @@
 # ============================================================================
-# Hablara - Ubuntu Build Workflow
+# Hablara - Linux Build Workflow
 # ============================================================================
-# Builds Ubuntu 24.04 LTS packages (.deb + .AppImage) for Hablara desktop app.
+# Builds Linux packages (.deb, .rpm, .AppImage) for Hablara desktop app.
+#
+# Build Environment:
+# - Ubuntu 22.04 runner (required for WebKitGTK 4.1 / Tauri v2)
+# - Outputs: .deb (Debian/Ubuntu), .rpm (Fedora/RHEL), .AppImage (universal)
+#
+# Security Measures:
+# - whisper.cpp: Commit SHA verification (v1.7.2 = 6266a9f9...)
+# - Model: SHA256 checksum verification (must be configured on first run)
+# - RPM: Integrity validation after alien conversion
+#
+# Known Issues & Workarounds:
+# - NO_STRIP=true for linuxdeploy ELF bug (Tauri #14796)
+# - Native RPM build with alien fallback (Tauri #11478)
 #
 # Triggers:
 # - Tag push (v*) - creates release artifacts
 # - Manual dispatch - for testing
 #
 # Prerequisites:
-# - whisper.cpp is built from source during CI (CMake)
-# - german-turbo model is cached (1.62 GB)
+# - whisper.cpp built from source (CMake, pinned v1.7.2)
+# - german-turbo model cached (1.62 GB)
+#
+# Initial Setup:
+# 1. Run workflow once to get model SHA256 (check logs)
+# 2. Update EXPECTED_SHA256 in "Download whisper model" step
 # ============================================================================
 
-name: Ubuntu Build
+name: Linux Build
 
 on:
   push:
@@ -23,18 +40,19 @@ on:
 permissions:
   contents: write
 
-env:
-  APP_NAME: "Hablara"
+concurrency:
+  group: linux-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-ubuntu:
-    name: Build Ubuntu x64
-    runs-on: ubuntu-24.04
+  build-linux:
+    name: Build Linux x64
+    runs-on: ubuntu-22.04  # Required for WebKitGTK 4.1 (Tauri v2)
     timeout-minutes: 45
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Install system dependencies
         run: |
@@ -47,27 +65,30 @@ jobs:
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev \
             libasound2-dev \
             cmake \
-            build-essential
+            build-essential \
+            rpm \
+            alien
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
         with:
           node-version: '20'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0c17529a66aca453f9227af23103ed11469b1e47  # v4.0.0
         with:
           version: 10
 
       - name: Setup pnpm cache
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -75,7 +96,7 @@ jobs:
           targets: x86_64-unknown-linux-gnu
 
       - name: Setup Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330  # v2.7.8
         with:
           workspaces: './src-tauri -> target'
 
@@ -87,7 +108,7 @@ jobs:
       # ========================================
       - name: Cache whisper model
         id: cache-whisper-model
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: src-tauri/models/ggml-german-turbo.bin
           key: whisper-german-turbo-1.62gb
@@ -97,18 +118,66 @@ jobs:
         run: |
           mkdir -p src-tauri/models
           echo "Downloading german-turbo model (1.62 GB)..."
-          curl -L --progress-bar \
+          curl -L --fail --progress-bar \
+            --max-time 600 \
+            --retry 3 \
+            --retry-delay 5 \
             "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" \
             -o src-tauri/models/ggml-german-turbo.bin
+
+          # Verify file size (should be approximately 1.62 GB)
+          FILE_SIZE=$(stat -c%s src-tauri/models/ggml-german-turbo.bin)
+          MIN_SIZE=1600000000
+          if [ "$FILE_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "ERROR: Downloaded file too small: $FILE_SIZE bytes"
+            exit 1
+          fi
+
+          # SECURITY: Verify SHA256 checksum
+          # To get the checksum initially, run: sha256sum src-tauri/models/ggml-german-turbo.bin
+          EXPECTED_SHA256="REPLACE_WITH_KNOWN_GOOD_SHA256"
+          ACTUAL_SHA256=$(sha256sum src-tauri/models/ggml-german-turbo.bin | awk '{print $1}')
+
+          if [ "$EXPECTED_SHA256" = "REPLACE_WITH_KNOWN_GOOD_SHA256" ]; then
+            echo "Current SHA256: $ACTUAL_SHA256"
+            # For release builds (v* tags), checksum MUST be configured
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "::error::SHA256 checksum not configured! Failing release build for security."
+              exit 1
+            fi
+            echo "::warning::SHA256 checksum not configured. Add: $ACTUAL_SHA256"
+          elif [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "ERROR: Model checksum mismatch!"
+            echo "Expected: $EXPECTED_SHA256"
+            echo "Actual:   $ACTUAL_SHA256"
+            exit 1
+          else
+            echo "SHA256 checksum verified: OK"
+          fi
+
           ls -lh src-tauri/models/ggml-german-turbo.bin
-          echo "Model downloaded"
+          echo "Model downloaded and verified"
 
       - name: Build whisper.cpp for Linux
         run: |
           set -e
           echo "Cloning whisper.cpp..."
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          # Pin to specific release for reproducibility
+          git clone --depth 1 --branch v1.7.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
           cd /tmp/whisper-build
+
+          # SECURITY: Verify commit SHA to prevent supply chain attacks
+          EXPECTED_SHA="6266a9f9e56a5b925e9892acf650f3eb1245814d"  # v1.7.2
+          ACTUAL_SHA=$(git rev-parse HEAD)
+
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "ERROR: whisper.cpp commit SHA mismatch!"
+            echo "Expected: $EXPECTED_SHA"
+            echo "Actual:   $ACTUAL_SHA"
+            echo "This could indicate a compromised repository or incorrect tag."
+            exit 1
+          fi
+          echo "Commit SHA verified: OK (v1.7.2)"
 
           echo "Building for x86_64..."
           cmake -B build -S . \
@@ -125,20 +194,25 @@ jobs:
             exit 1
           fi
 
-          mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
-          cp "$BINARY" $GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu
-          chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu
+          mkdir -p "$GITHUB_WORKSPACE/src-tauri/binaries"
+          cp "$BINARY" "$GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu"
+          chmod +x "$GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu"
 
           echo "whisper.cpp built for Linux"
-          ls -lh $GITHUB_WORKSPACE/src-tauri/binaries/
+          ls -lh "$GITHUB_WORKSPACE/src-tauri/binaries/"
 
       # ========================================
       # Build Tauri Linux App
       # ========================================
       - name: Build Tauri Linux app
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@2773e489dd94df5e87641131f67916b46ef3a8d5  # v0.5.15
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Workaround for linuxdeploy strip bug (GitHub #14796)
+          # Prevents "unknown type [0x13] section `.relr.dyn`" error
+          NO_STRIP: "true"
+          # Improves AppImage compatibility on systems without FUSE
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Hablara ${{ github.ref_name }}'
@@ -146,10 +220,75 @@ jobs:
           prerelease: false
           args: --target x86_64-unknown-linux-gnu
 
+      # ========================================
+      # Fallback: Build RPM with alien if native build failed
+      # ========================================
+      - name: Check if RPM was built
+        id: check-rpm
+        run: |
+          RPM_DIR="src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm"
+          if [ -d "$RPM_DIR" ]; then
+            RPM_COUNT=$(find "$RPM_DIR" -name "*.rpm" 2>/dev/null | wc -l)
+            if [ "$RPM_COUNT" -gt 0 ]; then
+              echo "rpm_exists=true" >> $GITHUB_OUTPUT
+              echo "Native RPM build successful"
+              exit 0
+            fi
+          fi
+          echo "rpm_exists=false" >> $GITHUB_OUTPUT
+          echo "Native RPM build failed, will use alien"
+
+      - name: Build RPM with alien (fallback)
+        if: steps.check-rpm.outputs.rpm_exists == 'false'
+        run: |
+          set -e
+
+          DEB_DIR="src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb"
+          if [ ! -d "$DEB_DIR" ]; then
+            echo "ERROR: DEB directory does not exist: $DEB_DIR"
+            exit 1
+          fi
+
+          DEB_FILE=$(find "$DEB_DIR" -name "Hablara_*.deb" -type f | head -1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "ERROR: No DEB file found in $DEB_DIR"
+            exit 1
+          fi
+
+          # alien and rpm are already installed from system dependencies
+          cd "$DEB_DIR"
+
+          echo "Converting $(basename "$DEB_FILE") to RPM..."
+          alien --to-rpm --scripts "$(basename "$DEB_FILE")"
+
+          # Rename to match Tauri naming convention
+          RPM_FILE=$(find . -name "hablara-*.rpm" -type f | head -1)
+          if [ -z "$RPM_FILE" ]; then
+            echo "ERROR: alien did not create RPM file"
+            exit 1
+          fi
+
+          VERSION=$(basename "$RPM_FILE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+          mv "$RPM_FILE" "Hablara-${VERSION}.x86_64.rpm"
+
+          # Validate RPM integrity
+          RPM_PATH="Hablara-${VERSION}.x86_64.rpm"
+          if ! rpm -qpl "$RPM_PATH" > /dev/null 2>&1; then
+            echo "ERROR: Generated RPM is corrupted or invalid"
+            exit 1
+          fi
+          echo "RPM integrity validated: OK"
+
+          # Move to RPM bundle directory
+          mkdir -p ../rpm
+          mv Hablara-*.rpm ../rpm/
+          echo "RPM created via alien: Hablara-${VERSION}.x86_64.rpm"
+
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
         with:
-          name: ubuntu-build
+          name: linux-build
           path: |
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
             src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm/*.rpm

@@ -43,6 +43,7 @@ dirs = "5.0"  # Home directory detection for security validation
 tauri-plugin-fs = "^2.0"
 tauri-plugin-opener = "2.0.0"
 tauri-plugin-http = "2"  # HTTP client for Anthropic API (bypasses CORS)
+open = "5"  # Open URLs in default browser (for Help menu)
 
 # VAD with load-dynamic feature to avoid MSVC linking issues on Windows
 [target.'cfg(target_os = "windows")'.dependencies.vad-rs]

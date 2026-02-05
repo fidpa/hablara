@@ -18,6 +18,8 @@ import { SegmentLevelMeter } from "@/components/SegmentLevelMeter";
 import { SettingsPanel } from "@/components/settings";
 import { RecordingsLibrary } from "@/components/RecordingsLibrary";
 import { useHotkey } from "@/hooks/useHotkey";
+import { useInAppShortcut } from "@/hooks/useInAppShortcut";
+import { useMenuEvents } from "@/hooks/useMenuEvents";
 import { useTextImport } from "@/hooks/useTextImport";
 import { useAudioFileImport } from "@/hooks/useAudioFileImport";
 import { useTauri } from "@/hooks/useTauri";
@@ -27,6 +29,7 @@ import { useWindowState } from "@/hooks/useWindowState";
 import { Toaster } from "@/components/ui/toaster";
 import { OnboardingTour } from "@/components/tour/OnboardingTour";
 import { SetupHintsModal } from "@/components/SetupHintsModal";
+import { ShortcutsModal } from "@/components/ShortcutsModal";
 import { PermissionOnboarding } from "@/components/PermissionOnboarding";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PersonalizedFeedbackPanel } from "@/components/PersonalizedFeedbackPanel";
@@ -60,11 +63,9 @@ export default function Home(): JSX.Element {
     confidence: 0,
     source: "fused",
   });
-  const [_currentTopic, setCurrentTopic] = useState<TopicResult | null>(null);
-  const [_analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [_currentGFK, setCurrentGFK] = useState<GFKAnalysis | null>(null);
-  const [_currentCognitive, setCurrentCognitive] = useState<CognitiveDistortionResult | null>(null);
-  const [_currentFourSides, setCurrentFourSides] = useState<FourSidesAnalysis | null>(null);
+  // Note: These values are stored in refs (not state) because they're only used
+  // in async callbacks, not for rendering. Using refs avoids unnecessary re-renders.
+  // See: currentGFKRef, currentCognitiveRef, currentFourSidesRef defined below.
   const [showSettings, setShowSettings] = useState(false);
   const [showRecordings, setShowRecordings] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export default function Home(): JSX.Element {
   const [showPermissions, setShowPermissions] = useState(false);
   const [showSetupHints, setShowSetupHints] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   const { isTauri, isReady: _isReady, bringToFront } = useTauri();
   const { toast } = useToast();
@@ -292,6 +294,16 @@ export default function Home(): JSX.Element {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showSettings]);
 
+  // Listen to Tauri menu events (Settings, Shortcuts)
+  // Extracted to useMenuEvents hook for cleaner separation
+  const handleMenuOpenSettings = useCallback(() => setShowSettings(true), []);
+  const handleMenuShowShortcuts = useCallback(() => setShowShortcuts(true), []);
+  useMenuEvents({
+    isTauri,
+    onOpenSettings: handleMenuOpenSettings,
+    onShowShortcuts: handleMenuShowShortcuts,
+  });
+
   // First-time detection: Permission onboarding → Setup hints modal → Tour
   useEffect(() => {
     // SSR safety check
@@ -376,6 +388,12 @@ export default function Home(): JSX.Element {
     }
   }, []);
 
+  // Setup hints → Settings navigation handler
+  const handleOpenSettingsFromSetupHints = useCallback(() => {
+    setShowSetupHints(false);
+    setShowSettings(true);
+  }, []);
+
   // Restart setup hints handler (called from Settings)
   const handleRestartSetupHints = useCallback(() => {
     setShowTour(false); // Close tour if running
@@ -449,6 +467,7 @@ export default function Home(): JSX.Element {
   }, [isRecording, appSettings.hotkey, appSettings.audio, appSettings.emotionAnalysisEnabled, appSettings.fallacyDetectionEnabled, appSettings.toneAnalysisEnabled, appSettings.psychological.gfkAnalysisEnabled, appSettings.psychological.cognitiveDistortionEnabled, appSettings.psychological.fourSidesAnalysisEnabled, appSettings.topicClassificationEnabled, toast, playSound, processing, bringToFront]);
 
   // Register global hotkey from settings with debounce (prevents rapid double-triggers)
+  // Note: Global hotkeys don't work in App Store builds due to sandbox restrictions
   useHotkey(appSettings.hotkey, () => {
     const now = Date.now();
     const timeSinceLastHotkey = now - lastHotkeyTimeRef.current;
@@ -456,6 +475,21 @@ export default function Home(): JSX.Element {
     // Debounce: Ignore hotkey if triggered within debounce interval
     if (timeSinceLastHotkey < PROCESSING_UI_TIMINGS.hotkeyDebounceMs) {
       logger.debug('Home', 'Hotkey debounced (too fast)', { timeSinceLastHotkey });
+      return;
+    }
+
+    lastHotkeyTimeRef.current = now;
+    toggleRecording(true);
+  });
+
+  // In-App shortcut for App Store builds (sandbox blocks global hotkeys)
+  // Auto-enabled only when NEXT_PUBLIC_APP_STORE=true
+  useInAppShortcut(appSettings.hotkey, () => {
+    const now = Date.now();
+    const timeSinceLastHotkey = now - lastHotkeyTimeRef.current;
+
+    if (timeSinceLastHotkey < PROCESSING_UI_TIMINGS.hotkeyDebounceMs) {
+      logger.debug('Home', 'In-app shortcut debounced', { timeSinceLastHotkey });
       return;
     }
 
@@ -554,36 +588,33 @@ export default function Home(): JSX.Element {
     setCurrentTone(tone);
   }, []);
 
-  // Handle topic update from text classification
-  const handleTopicUpdate = useCallback((topic: TopicResult) => {
-    setCurrentTopic(topic);
+  // Handle topic update from text classification (stored for potential future use)
+  const handleTopicUpdate = useCallback((_topic: TopicResult) => {
+    // Topic is received but not currently displayed in UI
+    // Could be used for topic-based filtering or grouping in future
   }, []);
 
   // Refs for psychological data (avoids stale closure in handleAnalysis)
+  // Using refs instead of state because values are only used in async callbacks, not for rendering
   const currentGFKRef = useRef<GFKAnalysis | null>(null);
   const currentCognitiveRef = useRef<CognitiveDistortionResult | null>(null);
   const currentFourSidesRef = useRef<FourSidesAnalysis | null>(null);
 
-  // Handle psychological enrichment updates
+  // Handle psychological enrichment updates (store in refs for async callback access)
   const handleGFKUpdate = useCallback((gfk: GFKAnalysis) => {
-    setCurrentGFK(gfk);
     currentGFKRef.current = gfk;
   }, []);
 
   const handleCognitiveUpdate = useCallback((cognitive: CognitiveDistortionResult) => {
-    setCurrentCognitive(cognitive);
     currentCognitiveRef.current = cognitive;
   }, []);
 
   const handleFourSidesUpdate = useCallback((fourSides: FourSidesAnalysis) => {
-    setCurrentFourSides(fourSides);
     currentFourSidesRef.current = fourSides;
   }, []);
 
   // Handle analysis result (fallacies, enrichment) + generate chat summary
   const handleAnalysis = useCallback(async (result: AnalysisResult, emotion: EmotionState) => {
-    setAnalysisResult(result);
-
     // Update the last segment with the correct emotion and fallacies
     setSegments((prev) => {
       if (prev.length === 0) return prev;
@@ -986,7 +1017,6 @@ export default function Home(): JSX.Element {
   const handleClearChat = useCallback(() => {
     setSegments([]);
     setChatHistory([]);
-    setAnalysisResult(null);
     setCurrentEmotion({
       primary: "neutral",
       confidence: 0,
@@ -1001,9 +1031,7 @@ export default function Home(): JSX.Element {
       confidence: 0,
       source: "fused",
     });
-    setCurrentGFK(null);
-    setCurrentCognitive(null);
-    setCurrentFourSides(null);
+    // Reset psychological data refs
     currentGFKRef.current = null;
     currentCognitiveRef.current = null;
     currentFourSidesRef.current = null;
@@ -1387,16 +1415,26 @@ export default function Home(): JSX.Element {
       </ErrorBoundary>
 
       {/* Setup Hints Modal (Stage 1) */}
-      <SetupHintsModal
-        isOpen={showSetupHints}
-        onClose={handleSetupHintsClose}
-      />
+      <ErrorBoundary name="SetupHintsModal">
+        <SetupHintsModal
+          isOpen={showSetupHints}
+          onClose={handleSetupHintsClose}
+          onOpenSettings={handleOpenSettingsFromSetupHints}
+        />
+      </ErrorBoundary>
 
       {/* Onboarding Tour */}
       <OnboardingTour
         isModelLoading={isModelLoading}
         forcedRun={showTour}
         onTourEnd={() => setShowTour(false)}
+      />
+
+      {/* Shortcuts Modal (Help menu → Tastaturkürzel) */}
+      <ShortcutsModal
+        isOpen={showShortcuts}
+        onClose={() => setShowShortcuts(false)}
+        hotkey={appSettings.hotkey}
       />
     </main>
     </ErrorBoundary>
