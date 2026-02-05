@@ -6,6 +6,7 @@
 [![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
+[![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
 
 Desktop-App für Selbstreflexion mit Spracherkennung und KI-gestützter Sprachanalyse.
 
@@ -68,6 +69,17 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 #### 1️⃣ Hablará installieren
 - DMG öffnen → `Hablará.app` in `Programme` ziehen
 - Sicherheitseinstellungen: "Trotzdem öffnen" (einmalig)
+
+<details>
+<summary>📋 Alternative: Via Homebrew</summary>
+
+```bash
+brew install --cask fidpa/hablara/hablara
+```
+
+Updates: `brew upgrade --cask hablara`
+
+</details>
 
 #### 2️⃣ Ollama installieren (empfohlen)
 
