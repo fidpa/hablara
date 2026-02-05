@@ -67,17 +67,22 @@ jobs:
       # ========================================
       # Apple Code Signing & Notarization Setup
       # ========================================
-      - name: Import Apple Certificate
+      # Required Secrets:
+      #   - DEVELOPER_ID_CERT_BASE64: Developer ID Application certificate (.p12, base64)
+      #   - DEVELOPER_ID_CERT_PASSWORD: Password for the .p12 file
+      #   - ASC_API_*: App Store Connect API credentials (for notarization)
+      # ========================================
+      - name: Import Developer ID Certificate
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATES_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATES_PASSWORD }}
+          DEVELOPER_ID_CERT: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
         run: |
           # Create temporary keychain
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
 
           # Decode certificate
-          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
+          echo "$DEVELOPER_ID_CERT" | base64 --decode > $RUNNER_TEMP/certificate.p12
 
           # Create and configure keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
@@ -86,7 +91,7 @@ jobs:
 
           # Import certificate
           security import $RUNNER_TEMP/certificate.p12 -k $KEYCHAIN_PATH \
-            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            -P "$DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
 
           # Set keychain permissions
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
@@ -94,7 +99,7 @@ jobs:
 
           # Cleanup
           rm $RUNNER_TEMP/certificate.p12
-          echo "✅ Apple Certificate imported"
+          echo "✅ Developer ID Certificate imported"
 
       - name: Setup App Store Connect API Key
         env:

@@ -16,9 +16,10 @@ on:
   workflow_dispatch:
     inputs:
       fail_threshold:
-        description: 'Fail threshold (number of broken links)'
+        description: 'Fail threshold (number of broken links, 0-100)'
         required: false
         default: '5'
+        type: number
 
 permissions:
   contents: read
@@ -37,6 +38,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Validate Inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          THRESHOLD_INPUT: ${{ github.event.inputs.fail_threshold }}
+        run: |
+          # Validate threshold is a number between 0 and 100
+          if ! [[ "$THRESHOLD_INPUT" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: fail_threshold must be a positive integer"
+            exit 1
+          fi
+          if [ "$THRESHOLD_INPUT" -lt 0 ] || [ "$THRESHOLD_INPUT" -gt 100 ]; then
+            echo "ERROR: fail_threshold must be between 0 and 100"
+            exit 1
+          fi
+          echo "✅ Input validation passed: threshold=$THRESHOLD_INPUT"
+
       - name: Restore Link Cache
         uses: actions/cache@v4
         with:
@@ -49,7 +66,8 @@ jobs:
         id: lychee
         continue-on-error: true
         timeout-minutes: 10
-        uses: lycheeverse/lychee-action@v2.1.0
+        # Pin to v2.1.0 commit SHA for supply chain security
+        uses: lycheeverse/lychee-action@7cd0af4c74a61395d455af97419bc4f69bd3e0fb
         with:
           args: >-
             --cache
@@ -87,23 +105,44 @@ jobs:
           BROKEN_COUNT=0
 
           if [ -f lychee-report.md ]; then
-            # Suche nach "Broken: X" Pattern im Report
+            # Suche nach "Broken: X" Pattern im Report (vereinfachtes grep)
             if grep -q "Broken:" lychee-report.md; then
-              BROKEN_COUNT=$(grep -oE 'Broken: [0-9]+' lychee-report.md | grep -oE '[0-9]+' || echo "0")
+              BROKEN_COUNT=$(grep -oP 'Broken:\s*\K[0-9]+' lychee-report.md 2>/dev/null || echo "0")
             else
               # Fallback: Zähle ✗ Symbole (unique wegen --unique flag)
-              BROKEN_COUNT=$(grep -c "✗" lychee-report.md || echo "0")
+              BROKEN_COUNT=$(grep -c "✗" lychee-report.md 2>/dev/null || echo "0")
             fi
+          fi
+
+          # Ensure BROKEN_COUNT is a valid integer
+          if ! [[ "$BROKEN_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "WARNING: Invalid BROKEN_COUNT value: '$BROKEN_COUNT', using 0"
+            BROKEN_COUNT=0
           fi
 
           echo "broken_count=$BROKEN_COUNT" >> $GITHUB_OUTPUT
           echo "📊 Gefundene Broken Links: $BROKEN_COUNT"
 
       - name: PR Check - Fail on Threshold
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
+        env:
+          BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
+          THRESHOLD: ${{ github.event.inputs.fail_threshold || '5' }}
         run: |
-          BROKEN_COUNT="${{ steps.parse.outputs.broken_count }}"
-          THRESHOLD="${{ github.event.inputs.fail_threshold || '5' }}"
+          # Ensure numeric values with defaults
+          BROKEN_COUNT="${BROKEN_COUNT:-0}"
+          THRESHOLD="${THRESHOLD:-5}"
+
+          # Validate numeric input
+          if ! [[ "$BROKEN_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "WARNING: Invalid BROKEN_COUNT value: '$BROKEN_COUNT', using 0"
+            BROKEN_COUNT=0
+          fi
+
+          if ! [[ "$THRESHOLD" =~ ^[0-9]+$ ]]; then
+            echo "WARNING: Invalid THRESHOLD value: '$THRESHOLD', using 5"
+            THRESHOLD=5
+          fi
 
           if [ "$BROKEN_COUNT" -ge "$THRESHOLD" ]; then
             echo "❌ FAILED: $BROKEN_COUNT Broken Links gefunden (Threshold: ≥$THRESHOLD)"
@@ -120,7 +159,7 @@ jobs:
           fi
 
       - name: PR Check - Comment Results
-        if: github.event_name == 'pull_request' && steps.parse.outputs.broken_count > 0
+        if: always() && github.event_name == 'pull_request' && fromJSON(steps.parse.outputs.broken_count || '0') > 0
         uses: actions/github-script@v7
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
@@ -133,9 +172,15 @@ jobs:
             const threshold = parseInt(process.env.THRESHOLD) || 5;
             const emoji = brokenCount >= threshold ? '❌' : '⚠️';
 
+            // Read and truncate report if too long (GitHub API limit: 65536 bytes)
+            const MAX_BODY_LENGTH = 60000;
             let reportContent = '_(Keine Details verfügbar)_';
             try {
               reportContent = fs.readFileSync('lychee-report.md', 'utf8');
+              if (reportContent.length > MAX_BODY_LENGTH) {
+                reportContent = reportContent.substring(0, MAX_BODY_LENGTH) +
+                  '\n\n... (truncated, see workflow run for full report)';
+              }
             } catch (e) {
               console.log('Report-Datei nicht gefunden');
             }
@@ -154,7 +199,7 @@ jobs:
             });
 
       - name: Schedule Check - Create/Update Issue
-        if: github.event_name == 'schedule' && steps.parse.outputs.broken_count > 0
+        if: always() && github.event_name == 'schedule' && fromJSON(steps.parse.outputs.broken_count || '0') > 0
         uses: actions/github-script@v7
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
@@ -166,10 +211,15 @@ jobs:
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const date = new Date().toISOString().split('T')[0];
 
-            // Lese Report-Datei
+            // Read and truncate report if too long (GitHub API limit: 65536 bytes)
+            const MAX_BODY_LENGTH = 60000;
             let reportContent = '_(Keine Details verfügbar)_';
             try {
               reportContent = fs.readFileSync('lychee-report.md', 'utf8');
+              if (reportContent.length > MAX_BODY_LENGTH) {
+                reportContent = reportContent.substring(0, MAX_BODY_LENGTH) +
+                  '\n\n... (truncated, see workflow run for full report)';
+              }
             } catch (e) {
               console.log('Report-Datei nicht gefunden');
             }
@@ -195,10 +245,11 @@ jobs:
               // Fortfahren ohne existierendes Issue
             }
 
+            const runNumber = '${{ github.run_number }}';
             const issueBody = `## 🔗 Broken Links gefunden (${date})
 
 **Anzahl:** ${brokenCount} defekte Links
-**Workflow:** [Link Check #${{ github.run_number }}](${runUrl})
+**Workflow:** [Link Check #${runNumber}](${runUrl})
 
 ### Details
 
@@ -238,11 +289,13 @@ _Nächste Prüfung: Morgen 02:00 UTC_`;
             }
 
       - name: Manual Run - Summary
-        if: github.event_name == 'workflow_dispatch'
+        if: always() && github.event_name == 'workflow_dispatch'
+        env:
+          BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
         run: |
           echo "ℹ️  Manuelle Ausführung - Nur Info, kein Fail"
           echo ""
-          echo "📊 Broken Links: ${{ steps.parse.outputs.broken_count }}"
+          echo "📊 Broken Links: $BROKEN_COUNT"
           echo ""
           if [ -f lychee-report.md ]; then
             cat lychee-report.md
