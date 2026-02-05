@@ -1,18 +1,23 @@
 name: Link Check
 
+# Configuration constants (DRY - single source of truth)
+env:
+  DEFAULT_THRESHOLD: '5'
+  MAX_BODY_LENGTH: '60000'
+
 on:
-  # Täglich um 02:00 UTC
+  # Daily at 02:00 UTC
   schedule:
     - cron: '0 2 * * *'
 
-  # Bei PR-Änderungen an Markdown-Dateien
+  # On PR changes to Markdown files
   pull_request:
     paths:
       - '**.md'
       - '.lycheeignore'
       - '.github/workflows/links-check.yml'
 
-  # Manuelle Ausführung
+  # Manual execution
   workflow_dispatch:
     inputs:
       fail_threshold:
@@ -25,7 +30,7 @@ permissions:
   contents: read
   issues: write
 
-# Verhindere parallele Ausführungen
+# Prevent parallel executions
 concurrency:
   group: link-check-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -101,15 +106,15 @@ jobs:
         id: parse
         if: always()
         run: |
-          # Extrahiere Anzahl der Broken Links aus dem Lychee-Output
+          # Extract number of broken links from Lychee output
           BROKEN_COUNT=0
 
           if [ -f lychee-report.md ]; then
-            # Suche nach "Broken: X" Pattern im Report (vereinfachtes grep)
+            # Search for "Broken: X" pattern in report (POSIX-compatible awk)
             if grep -q "Broken:" lychee-report.md; then
-              BROKEN_COUNT=$(grep -oP 'Broken:\s*\K[0-9]+' lychee-report.md 2>/dev/null || echo "0")
+              BROKEN_COUNT=$(grep "Broken:" lychee-report.md | awk '{print $2}' | head -1 || echo "0")
             else
-              # Fallback: Zähle ✗ Symbole (unique wegen --unique flag)
+              # Fallback: Count ✗ symbols (unique due to --unique flag)
               BROKEN_COUNT=$(grep -c "✗" lychee-report.md 2>/dev/null || echo "0")
             fi
           fi
@@ -121,17 +126,17 @@ jobs:
           fi
 
           echo "broken_count=$BROKEN_COUNT" >> $GITHUB_OUTPUT
-          echo "📊 Gefundene Broken Links: $BROKEN_COUNT"
+          echo "📊 Found broken links: $BROKEN_COUNT"
 
       - name: PR Check - Fail on Threshold
         if: always() && github.event_name == 'pull_request'
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
-          THRESHOLD: ${{ github.event.inputs.fail_threshold || '5' }}
+          THRESHOLD: ${{ github.event.inputs.fail_threshold || env.DEFAULT_THRESHOLD }}
         run: |
           # Ensure numeric values with defaults
           BROKEN_COUNT="${BROKEN_COUNT:-0}"
-          THRESHOLD="${THRESHOLD:-5}"
+          THRESHOLD="${THRESHOLD:-${{ env.DEFAULT_THRESHOLD }}}"
 
           # Validate numeric input
           if ! [[ "$BROKEN_COUNT" =~ ^[0-9]+$ ]]; then
@@ -140,22 +145,22 @@ jobs:
           fi
 
           if ! [[ "$THRESHOLD" =~ ^[0-9]+$ ]]; then
-            echo "WARNING: Invalid THRESHOLD value: '$THRESHOLD', using 5"
-            THRESHOLD=5
+            echo "WARNING: Invalid THRESHOLD value: '$THRESHOLD', using ${{ env.DEFAULT_THRESHOLD }}"
+            THRESHOLD=${{ env.DEFAULT_THRESHOLD }}
           fi
 
           if [ "$BROKEN_COUNT" -ge "$THRESHOLD" ]; then
-            echo "❌ FAILED: $BROKEN_COUNT Broken Links gefunden (Threshold: ≥$THRESHOLD)"
+            echo "❌ FAILED: $BROKEN_COUNT broken links found (threshold: ≥$THRESHOLD)"
             echo ""
-            echo "Bitte überprüfe die defekten Links:"
-            cat lychee-report.md || echo "Keine Report-Datei gefunden"
+            echo "Please review the broken links:"
+            cat lychee-report.md || echo "No report file found"
             exit 1
           elif [ "$BROKEN_COUNT" -gt 0 ]; then
-            echo "⚠️  WARNING: $BROKEN_COUNT Broken Links gefunden (unter Threshold von $THRESHOLD)"
-            echo "PR wird nicht blockiert, aber bitte überprüfe die Links:"
-            cat lychee-report.md || echo "Keine Report-Datei gefunden"
+            echo "⚠️  WARNING: $BROKEN_COUNT broken links found (below threshold of $THRESHOLD)"
+            echo "PR not blocked, but please review the links:"
+            cat lychee-report.md || echo "No report file found"
           else
-            echo "✅ Alle Links funktionieren!"
+            echo "✅ All links are working!"
           fi
 
       - name: PR Check - Comment Results
@@ -163,26 +168,27 @@ jobs:
         uses: actions/github-script@v7
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
-          THRESHOLD: ${{ github.event.inputs.fail_threshold || '5' }}
+          THRESHOLD: ${{ github.event.inputs.fail_threshold || env.DEFAULT_THRESHOLD }}
+          MAX_BODY_LENGTH: ${{ env.MAX_BODY_LENGTH }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const brokenCount = parseInt(process.env.BROKEN_COUNT) || 0;
             const threshold = parseInt(process.env.THRESHOLD) || 5;
+            const maxBodyLength = parseInt(process.env.MAX_BODY_LENGTH) || 60000;
             const emoji = brokenCount >= threshold ? '❌' : '⚠️';
 
             // Read and truncate report if too long (GitHub API limit: 65536 bytes)
-            const MAX_BODY_LENGTH = 60000;
-            let reportContent = '_(Keine Details verfügbar)_';
+            let reportContent = '_(No details available)_';
             try {
               reportContent = fs.readFileSync('lychee-report.md', 'utf8');
-              if (reportContent.length > MAX_BODY_LENGTH) {
-                reportContent = reportContent.substring(0, MAX_BODY_LENGTH) +
+              if (reportContent.length > maxBodyLength) {
+                reportContent = reportContent.substring(0, maxBodyLength) +
                   '\n\n... (truncated, see workflow run for full report)';
               }
             } catch (e) {
-              console.log('Report-Datei nicht gefunden');
+              console.log('Report file not found');
             }
 
             const body = `${emoji} **Link Check Results**\n\n` +
@@ -203,28 +209,29 @@ jobs:
         uses: actions/github-script@v7
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
+          MAX_BODY_LENGTH: ${{ env.MAX_BODY_LENGTH }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const brokenCount = parseInt(process.env.BROKEN_COUNT) || 0;
+            const maxBodyLength = parseInt(process.env.MAX_BODY_LENGTH) || 60000;
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const date = new Date().toISOString().split('T')[0];
 
             // Read and truncate report if too long (GitHub API limit: 65536 bytes)
-            const MAX_BODY_LENGTH = 60000;
-            let reportContent = '_(Keine Details verfügbar)_';
+            let reportContent = '_(No details available)_';
             try {
               reportContent = fs.readFileSync('lychee-report.md', 'utf8');
-              if (reportContent.length > MAX_BODY_LENGTH) {
-                reportContent = reportContent.substring(0, MAX_BODY_LENGTH) +
+              if (reportContent.length > maxBodyLength) {
+                reportContent = reportContent.substring(0, maxBodyLength) +
                   '\n\n... (truncated, see workflow run for full report)';
               }
             } catch (e) {
-              console.log('Report-Datei nicht gefunden');
+              console.log('Report file not found');
             }
 
-            // Suche existierendes Issue mit Error-Handling
+            // Search for existing issue with error handling
             let existingIssue = null;
             try {
               const { data: issues } = await github.rest.issues.listForRepo({
@@ -242,13 +249,13 @@ jobs:
               existingIssue = issues[0];
             } catch (error) {
               console.error('Failed to list issues:', error);
-              // Fortfahren ohne existierendes Issue
+              // Continue without existing issue
             }
 
             const runNumber = '${{ github.run_number }}';
-            const issueBody = `## 🔗 Broken Links gefunden (${date})
+            const issueBody = `## 🔗 Broken Links Found (${date})
 
-**Anzahl:** ${brokenCount} defekte Links
+**Count:** ${brokenCount} broken links
 **Workflow:** [Link Check #${runNumber}](${runUrl})
 
 ### Details
@@ -259,29 +266,29 @@ ${reportContent}
 
 ---
 
-_Automatisch erstellt vom [Link Checker Workflow](${runUrl})_
-_Nächste Prüfung: Morgen 02:00 UTC_`;
+_Automatically created by [Link Checker Workflow](${runUrl})_
+_Next check: Tomorrow at 02:00 UTC_`;
 
             try {
               if (existingIssue) {
-                // Update existierendes Issue mit Kommentar
+                // Update existing issue with comment
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: existingIssue.number,
                   body: `## 📅 Update ${date}\n\n${issueBody}`
                 });
-                console.log(`Issue #${existingIssue.number} aktualisiert`);
+                console.log(`Issue #${existingIssue.number} updated`);
               } else {
-                // Erstelle neues Issue
+                // Create new issue
                 const newIssue = await github.rest.issues.create({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  title: `🔗 Broken Links in Dokumentation gefunden`,
+                  title: `🔗 Broken Links Found in Documentation`,
                   body: issueBody,
                   labels: ['broken-links', 'automated', 'documentation']
                 });
-                console.log(`Neues Issue #${newIssue.data.number} erstellt`);
+                console.log(`New issue #${newIssue.data.number} created`);
               }
             } catch (error) {
               console.error('Failed to create/update issue:', error);
@@ -293,7 +300,7 @@ _Nächste Prüfung: Morgen 02:00 UTC_`;
         env:
           BROKEN_COUNT: ${{ steps.parse.outputs.broken_count }}
         run: |
-          echo "ℹ️  Manuelle Ausführung - Nur Info, kein Fail"
+          echo "ℹ️  Manual execution - Info only, no fail"
           echo ""
           echo "📊 Broken Links: $BROKEN_COUNT"
           echo ""
