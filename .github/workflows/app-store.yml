@@ -206,6 +206,43 @@ jobs:
           echo "✅ Added x86_64 resource to tauri.conf.json"
 
       # ========================================
+      # 3b. Build Frontend (explicit step for debugging)
+      # ========================================
+      - name: Build frontend (Next.js)
+        run: |
+          echo "🔨 Building Next.js frontend..."
+          pnpm run build
+
+          echo ""
+          echo "=== Verify out/ directory exists ==="
+          if [ -d "out" ]; then
+            echo "✅ out/ directory exists"
+            ls -la out/ | head -20
+            echo ""
+            echo "=== Check for index.html ==="
+            if [ -f "out/index.html" ]; then
+              echo "✅ index.html exists ($(wc -c < out/index.html) bytes)"
+            else
+              echo "❌ ERROR: index.html NOT FOUND!"
+              exit 1
+            fi
+            echo ""
+            echo "=== Check for _next/ ==="
+            if [ -d "out/_next" ]; then
+              echo "✅ _next/ directory exists"
+              find out/_next -type f | wc -l | xargs echo "   Files in _next/:"
+            else
+              echo "❌ ERROR: _next/ directory NOT FOUND!"
+              exit 1
+            fi
+          else
+            echo "❌ ERROR: out/ directory NOT FOUND!"
+            echo "Current directory contents:"
+            ls -la
+            exit 1
+          fi
+
+      # ========================================
       # 4. Import Certificates
       # ========================================
       - name: Import Apple certificates
@@ -272,6 +309,40 @@ jobs:
         run: pnpm tauri build --target universal-apple-darwin --bundles app
         env:
           NEXT_PUBLIC_APP_STORE: "true"
+
+      - name: Verify frontend in app bundle
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/${{ env.APP_NAME }}.app"
+          echo "=== Checking frontend assets in bundle ==="
+
+          echo ""
+          echo "=== _up_ directory contents ==="
+          ls -la "$APP_PATH/Contents/Resources/_up_/" || echo "❌ _up_ directory not found!"
+
+          echo ""
+          echo "=== Check for index.html in bundle ==="
+          if [ -f "$APP_PATH/Contents/Resources/_up_/index.html" ]; then
+            echo "✅ index.html found in bundle ($(wc -c < "$APP_PATH/Contents/Resources/_up_/index.html") bytes)"
+          else
+            echo "❌ ERROR: index.html NOT in bundle!"
+            echo ""
+            echo "Searching for index.html anywhere in bundle..."
+            find "$APP_PATH" -name "index.html" 2>/dev/null || echo "Not found anywhere"
+            echo ""
+            echo "Full _up_ structure:"
+            find "$APP_PATH/Contents/Resources/_up_" -type f 2>/dev/null | head -50 || echo "No files found"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Check for _next/ in bundle ==="
+          if [ -d "$APP_PATH/Contents/Resources/_up_/_next" ]; then
+            echo "✅ _next/ directory found in bundle"
+            find "$APP_PATH/Contents/Resources/_up_/_next" -type f | wc -l | xargs echo "   Files in _next/:"
+          else
+            echo "❌ ERROR: _next/ directory NOT in bundle!"
+            exit 1
+          fi
 
       - name: Verify build and patch Info.plist
         run: |
