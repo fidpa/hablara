@@ -1,8 +1,8 @@
 ---
 diataxis-type: reference
 status: production
-version: 1.0.0
-last_updated: 2026-02-04
+version: 1.0.1
+last_updated: 2026-02-05
 ---
 
 # Hablará Documentation
@@ -40,6 +40,7 @@ End-User Dokumentation fuer Hablará: Guides (Recording, Storage, FAQ), Referenc
 | Ich möchte... | Dokument |
 |---------------|----------|
 | Hablará installieren | [../README.md](../README.md) (Haupt-README) |
+| Linux-Probleme lösen | [guides/LINUX_TROUBLESHOOTING.md](./guides/LINUX_TROUBLESHOOTING.md) |
 | Aufnahme-Qualität optimieren | [guides/RECORDING_QUALITY.md](./guides/RECORDING_QUALITY.md) |
 | Aufnahmen verwalten | [guides/STORAGE.md](./guides/STORAGE.md) |
 | Häufige Probleme lösen | [guides/FAQ.md](./guides/FAQ.md) |
@@ -56,7 +57,8 @@ docs/
 ├── guides/                # How-To – Spezifische Aufgaben lösen
 │   ├── RECORDING_QUALITY.md   # LED-Meter, Mikrofon-Tipps, Speech Ratio
 │   ├── STORAGE.md             # Aufnahmen verwalten, WAV-Export
-│   └── FAQ.md                 # 10 häufigste Probleme
+│   ├── FAQ.md                 # 10 häufigste Probleme
+│   └── LINUX_TROUBLESHOOTING.md  # Ubuntu/Linux Troubleshooting
 ├── reference/             # Reference – Technische Details
 │   └── HOTKEYS.md             # Tastenkürzel & Konfiguration
 └── legal/                 # Rechtliches – Privacy, Lizenzen, Support
@@ -72,6 +74,7 @@ docs/
 - [Aufnahme-Qualität optimieren](./guides/RECORDING_QUALITY.md) - LED-Meter interpretieren, Mikrofon-Einstellungen, Speech Ratio
 - [Aufnahmen verwalten](./guides/STORAGE.md) - Auto-Save, RecordingsLibrary, WAV-Export
 - [FAQ](./guides/FAQ.md) - 10 häufigste Probleme und Lösungen
+- [Linux Troubleshooting](./guides/LINUX_TROUBLESHOOTING.md) - Ubuntu 24.04 Installation, Audio, Hotkeys, Ollama, Whisper
 
 ---
 
@@ -97,7 +100,7 @@ docs/
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.0.1
 **Created**: 28. Januar 2026
-**Last Updated**: 4. Februar 2026
+**Last Updated**: 5. Februar 2026
 **Status**: Production
