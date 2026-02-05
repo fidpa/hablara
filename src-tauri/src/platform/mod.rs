@@ -14,6 +14,7 @@ pub mod linux;
 
 // Re-export common platform utilities
 #[cfg(target_os = "macos")]
+#[allow(unused_imports)]
 pub use macos::*;
 
 #[cfg(target_os = "windows")]

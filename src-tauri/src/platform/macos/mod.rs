@@ -15,6 +15,7 @@ use std::path::PathBuf;
 /// Check if MLX (Apple Silicon ML framework) is available.
 ///
 /// Returns `true` on ARM64 (Apple Silicon), `false` on Intel Macs.
+#[allow(dead_code)]  // Reserved for future MLX-Whisper integration
 pub fn is_mlx_available() -> bool {
     #[cfg(target_arch = "aarch64")]
     {
