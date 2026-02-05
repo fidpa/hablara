@@ -119,9 +119,9 @@ jobs:
       # ========================================
       # Build whisper.cpp for Linux
       # ========================================
-      - name: Cache whisper model
+      - name: Restore whisper model cache
         id: cache-whisper-model
-        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        uses: actions/cache/restore@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: src-tauri/models/ggml-german-turbo.bin
           key: whisper-german-turbo-1.62gb
@@ -169,6 +169,13 @@ jobs:
 
           ls -lh src-tauri/models/ggml-german-turbo.bin
           echo "Model downloaded and verified"
+
+      - name: Save whisper model cache
+        if: steps.cache-whisper-model.outputs.cache-hit != 'true'
+        uses: actions/cache/save@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: src-tauri/models/ggml-german-turbo.bin
+          key: whisper-german-turbo-1.62gb
 
       - name: Build whisper.cpp for Linux
         run: |
@@ -310,6 +317,20 @@ jobs:
           sudo mv Hablara-*.rpm ../rpm/
           sudo chown -R "$(id -u):$(id -g)" ../rpm
           echo "RPM created via alien: Hablara-${VERSION}.x86_64.rpm"
+
+      - name: Upload RPM to Release
+        if: steps.check-rpm.outputs.rpm_exists == 'false'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RPM_FILE=$(find src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/rpm -name "*.rpm" | head -1)
+          if [ -n "$RPM_FILE" ]; then
+            echo "Uploading $RPM_FILE to release v${{ inputs.version }}..."
+            gh release upload "v${{ inputs.version }}" "$RPM_FILE" --clobber
+            echo "✅ RPM uploaded to release"
+          else
+            echo "⚠️ No RPM file found to upload"
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
