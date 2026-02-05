@@ -10,10 +10,15 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Check, AlertCircle, AlertTriangle, Info } from "lucide-react";
 import type { AppSettings, LLMProvider, CloudProviderConsent, LLMProviderStatus } from "@/lib/types";
-import { cn, isTauri, isWindows } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useTauri } from "@/hooks/useTauri";
-import { getApiKey } from "@/lib/secure-storage";
+import {
+  getApiKey,
+  checkSecretServiceStatus,
+  type SecretServiceStatus,
+} from "@/lib/secure-storage";
 import { logger } from "@/lib/logger";
+import { useToast } from "@/hooks/use-toast";
 
 import {
   Select,
@@ -25,6 +30,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ConsentModal } from "./ConsentModal";
+import { SecretServiceWarning } from "./SecretServiceWarning";
+import { OllamaTroubleshootingSection } from "./OllamaTroubleshootingSection";
 
 import { LLM_PROVIDERS, OLLAMA_MODELS, PROVIDER_DEFAULT_MODELS } from "./settings-constants";
 
@@ -62,30 +69,73 @@ export function LLMSettingsSection({
   onSettingsChange,
 }: LLMSettingsSectionProps) {
   const { isTauri: isTauriEnv } = useTauri();
+  const { toast } = useToast();
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<"openai" | "anthropic" | null>(null);
+  const [secretServiceStatus, setSecretServiceStatus] = useState<SecretServiceStatus | null>(null);
 
   // Track previous provider to avoid redundant updates
   const prevProviderRef = useRef(settings.llm.provider);
 
-  // Open external URL (Tauri-safe)
-  const openExternalUrl = useCallback(async (url: string) => {
-    if (isTauri()) {
-      try {
-        const { open } = await import("@tauri-apps/plugin-shell");
-        await open(url);
-      } catch (error) {
-        logger.error('LLMSettingsSection', 'Failed to open external URL', error);
+  // P2-1: Request ID to handle race conditions on rapid provider switches
+  const providerLoadRequestIdRef = useRef(0);
+
+  // Check Secret Service availability on Linux (Phase 55)
+  // P1-1 Optimization: Early-exit for non-Linux platforms to avoid unnecessary async calls
+  useEffect(() => {
+    // Fast synchronous check: Skip async call on macOS/Windows (95%+ of users)
+    if (typeof navigator !== "undefined") {
+      const platform = navigator.platform?.toLowerCase() ?? "";
+      if (!platform.includes("linux")) {
+        setSecretServiceStatus("not-linux");
+        return;
       }
-    } else {
-      window.open(url, "_blank", "noopener,noreferrer");
     }
+
+    // Linux-only: Actually check Secret Service availability
+    let cancelled = false;
+
+    const checkStatus = async () => {
+      const status = await checkSecretServiceStatus();
+      if (!cancelled) {
+        setSecretServiceStatus(status);
+        // Log only for actionable statuses
+        if (status === "unavailable" || status === "timeout") {
+          logger.warn("LLMSettingsSection", `Secret Service status: ${status}`);
+
+          // P2-3: User notification on Secret Service unavailable (Audit 2026-02-05)
+          if (status === "unavailable") {
+            toast({
+              title: "Kein Schlüsselbund-Dienst gefunden",
+              description: "Bitte installieren Sie GNOME Keyring (gnome-keyring) oder KWallet (kwalletmanager) für sichere API Key-Speicherung.",
+              variant: "destructive",
+            });
+          } else if (status === "timeout") {
+            toast({
+              title: "Schlüsselbund-Dienst antwortet nicht",
+              description: "Der Keyring-Daemon reagiert nicht. Bitte starten Sie gnome-keyring-daemon oder kwalletd.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+    };
+
+    checkStatus();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /**
    * Load correct API key when provider changes
    * Prevents showing wrong provider's key as dots
+   *
+   * P2-1: Uses request ID pattern to handle race conditions when user
+   * rapidly switches providers (e.g., OpenAI → Anthropic → Ollama).
+   * Only the most recent request's result is applied.
    */
   useEffect(() => {
     const provider = settings.llm.provider;
@@ -96,38 +146,43 @@ export function LLMSettingsSection({
     }
     prevProviderRef.current = provider;
 
-    let cancelled = false;
+    // P2-1: Increment request ID - only latest request will be applied
+    const currentRequestId = ++providerLoadRequestIdRef.current;
 
     const loadKeyForProvider = async () => {
       // Only cloud providers need API keys
       if (provider === "openai" || provider === "anthropic") {
         try {
           const key = await getApiKey(provider);
-          if (!cancelled) {
-            onSettingsChange({
-              ...settings,
-              llm: {
-                ...settings.llm,
-                apiKey: key || "",
-              },
-            });
+          // P2-1: Only apply if this is still the latest request
+          if (currentRequestId !== providerLoadRequestIdRef.current) {
+            logger.debug("LLMSettingsSection", `Ignoring stale API key load for ${provider}`);
+            return;
           }
+          onSettingsChange({
+            ...settings,
+            llm: {
+              ...settings.llm,
+              apiKey: key || "",
+            },
+          });
         } catch (error) {
           logger.error('LLMSettingsSection', `Failed to load API key for ${provider}`, error);
+          // P2-1: Only apply if this is still the latest request
+          if (currentRequestId !== providerLoadRequestIdRef.current) return;
           // Clear key on error to show empty field
-          if (!cancelled) {
-            onSettingsChange({
-              ...settings,
-              llm: {
-                ...settings.llm,
-                apiKey: "",
-              },
-            });
-          }
+          onSettingsChange({
+            ...settings,
+            llm: {
+              ...settings.llm,
+              apiKey: "",
+            },
+          });
         }
       } else {
         // Ollama: Clear any stale key
-        if (!cancelled && settings.llm.apiKey) {
+        // P2-1: Only apply if this is still the latest request
+        if (currentRequestId === providerLoadRequestIdRef.current && settings.llm.apiKey) {
           onSettingsChange({
             ...settings,
             llm: {
@@ -140,10 +195,6 @@ export function LLMSettingsSection({
     };
 
     loadKeyForProvider();
-
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.llm.provider]);
 
@@ -281,39 +332,32 @@ export function LLMSettingsSection({
           )}
         </div>
 
-        {/* Ollama Troubleshooting */}
-        {settings.llm.provider === "ollama" && (providerStatus === "offline" || providerStatus === "model-missing") && (
-          <div className="mt-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs space-y-2">
-            <div className="font-semibold text-slate-700 dark:text-slate-200">Ollama Setup erforderlich:</div>
-            {providerStatus === "offline" ? (
-              <>
-                <p className="text-slate-500 dark:text-slate-400">Ollama läuft nicht oder ist nicht installiert.</p>
-                <button
-                  type="button"
-                  onClick={() => openExternalUrl("https://ollama.com/download")}
-                  className="text-blue-600 dark:text-blue-400 hover:underline block text-left"
-                >
-                  1. Ollama herunterladen & installieren
-                </button>
-              </>
-            ) : (
-               <p className="text-slate-500 dark:text-slate-400">Ollama läuft, aber das Modell fehlt.</p>
+        {/* P2-3: Linux Secret Service Status Badge (Audit 2026-02-05) */}
+        {isTauriEnv &&
+          (settings.llm.provider === "openai" || settings.llm.provider === "anthropic") &&
+          secretServiceStatus &&
+          (secretServiceStatus === "unavailable" || secretServiceStatus === "timeout") && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Schlüsselbund:</span>
+            {secretServiceStatus === "unavailable" && (
+              <Badge variant="destructive" className="flex items-center gap-1" aria-label="Secret Service nicht gefunden">
+                <AlertCircle className="w-3 h-3" aria-hidden="true" /> Nicht installiert
+              </Badge>
             )}
-            
-            <p className="text-slate-500 dark:text-slate-400">2. Terminal öffnen und Befehl ausführen:</p>
-            <div className="bg-black p-2 rounded font-mono text-slate-600 dark:text-slate-300 select-all overflow-x-auto whitespace-nowrap">
-              {settings.llm.model.includes("custom")
-                ? (isWindows()
-                    ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
-                    : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash")
-                : `ollama pull ${settings.llm.model}`}
-            </div>
-            {settings.llm.model.includes("custom") && (
-              <div className="text-slate-500 dark:text-slate-400 mt-1 italic">
-                (Installiert Ollama + qwen2.5 + Custom Model)
-              </div>
+            {secretServiceStatus === "timeout" && (
+              <Badge variant="warning" className="flex items-center gap-1" aria-label="Secret Service antwortet nicht">
+                <AlertTriangle className="w-3 h-3" aria-hidden="true" /> Nicht gestartet
+              </Badge>
             )}
           </div>
+        )}
+
+        {/* Ollama Troubleshooting (extracted component) */}
+        {settings.llm.provider === "ollama" && (
+          <OllamaTroubleshootingSection
+            providerStatus={providerStatus}
+            model={settings.llm.model}
+          />
         )}
       </div>
 
@@ -380,6 +424,12 @@ export function LLMSettingsSection({
             />
           </div>
         </>
+      )}
+
+      {/* Linux Secret Service Warning (Phase 55, extracted component) */}
+      {secretServiceStatus &&
+        (settings.llm.provider === "openai" || settings.llm.provider === "anthropic") && (
+        <SecretServiceWarning status={secretServiceStatus} />
       )}
 
       {/* API Key for cloud providers */}
