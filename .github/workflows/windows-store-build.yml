@@ -1,49 +1,76 @@
 # ============================================================================
-# Hablará - Microsoft Store Build Workflow
+# Hablará - Microsoft Store Release Workflow
 # ============================================================================
 # Builds Windows MSI installer optimized for Microsoft Store submission.
 #
-# Differences from regular windows-build.yml:
-# - Uses offlineInstaller for WebView2 (Windows 10 compatibility)
+# Usage:
+#   1. Go to Actions tab in GitHub
+#   2. Select "Windows Store Release"
+#   3. Click "Run workflow"
+#   4. Enter version (must match tauri.conf.json)
+#
+# Differences from windows-build.yml:
+# - Includes WebView2 offline installer (Windows 10 compatibility)
 # - MSI-only output (no NSIS)
-# - NOT code-signed (Microsoft signs Store apps automatically)
+# - Unsigned (Microsoft signs Store apps automatically)
 #
 # Output: Unsigned MSI ready for Partner Center upload
 # ============================================================================
 
-name: Windows Store Build
+name: Windows Store Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.4)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: windows-store-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows-store:
-    name: Build Windows Store MSI
+    name: Build Windows Store MSI (v${{ inputs.version }})
     runs-on: windows-latest
     timeout-minutes: 60
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Validate version
+        shell: pwsh
+        run: |
+          $TAURI_VERSION = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          if ($TAURI_VERSION -ne "${{ inputs.version }}") {
+            Write-Host "❌ Version mismatch! Input: ${{ inputs.version }}, tauri.conf.json: $TAURI_VERSION"
+            exit 1
+          }
+          Write-Host "✅ Version validated: ${{ inputs.version }}"
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af  # v4.1.0
         with:
           node-version: '20'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@0c17529a66aca453f9227af23103ed11469b1e47  # v4.0.0
         with:
           version: 10
 
       - name: Setup pnpm cache
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: ~/.pnpm-store
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -51,7 +78,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Setup Rust cache
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@aa7c1c80a07a27a84c0aa76d0cef0aad3830e330  # v2.7.8
         with:
           workspaces: './src-tauri -> target'
 
@@ -63,7 +90,7 @@ jobs:
       # ========================================
       - name: Cache WebView2 Installer
         id: cache-webview2
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: src-tauri/WebView2RuntimeInstaller.exe
           key: webview2-evergreen-standalone-v1
@@ -83,7 +110,7 @@ jobs:
       # ========================================
       - name: Cache whisper model
         id: cache-whisper-model
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
         with:
           path: src-tauri/models/ggml-german-turbo.bin
           key: whisper-german-turbo-1.62gb
@@ -94,32 +121,120 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri/models
           Write-Host "Downloading german-turbo model (1.62 GB)..."
-          Invoke-WebRequest -Uri "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" -OutFile "src-tauri/models/ggml-german-turbo.bin"
+
+          # Download with retry logic
+          $maxRetries = 3
+          $retryDelay = 5
+          $success = $false
+
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            try {
+              Write-Host "Download attempt $i of $maxRetries..."
+              $ProgressPreference = 'SilentlyContinue'
+              Invoke-WebRequest -Uri "https://huggingface.co/cstr/whisper-large-v3-turbo-german-ggml/resolve/main/ggml-model.bin" -OutFile "src-tauri/models/ggml-german-turbo.bin" -TimeoutSec 600
+              $success = $true
+              break
+            } catch {
+              Write-Host "Attempt $i failed: $_"
+              if ($i -lt $maxRetries) {
+                Write-Host "Retrying in $retryDelay seconds..."
+                Start-Sleep -Seconds $retryDelay
+              }
+            }
+          }
+
+          if (-not $success) {
+            Write-Host "ERROR: Failed to download model after $maxRetries attempts"
+            exit 1
+          }
+
+          # Verify file size (should be approximately 1.62 GB)
+          $fileSize = (Get-Item "src-tauri/models/ggml-german-turbo.bin").Length
+          $minSize = 1600000000
+          if ($fileSize -lt $minSize) {
+            Write-Host "ERROR: Downloaded file too small: $fileSize bytes"
+            exit 1
+          }
+
+          # SECURITY: Verify SHA256 checksum
+          $EXPECTED_SHA256 = "REPLACE_WITH_KNOWN_GOOD_SHA256"
+          $ACTUAL_SHA256 = (Get-FileHash -Path "src-tauri/models/ggml-german-turbo.bin" -Algorithm SHA256).Hash.ToLower()
+
+          if ($EXPECTED_SHA256 -eq "REPLACE_WITH_KNOWN_GOOD_SHA256") {
+            Write-Host "Current SHA256: $ACTUAL_SHA256"
+            # For release builds (v* tags), checksum MUST be configured
+            if ($env:GITHUB_REF -like "refs/tags/v*") {
+              Write-Host "::error::SHA256 checksum not configured! Failing release build for security."
+              exit 1
+            }
+            Write-Host "::warning::SHA256 checksum not configured. Add: $ACTUAL_SHA256"
+          } elseif ($ACTUAL_SHA256 -ne $EXPECTED_SHA256.ToLower()) {
+            Write-Host "ERROR: Model checksum mismatch!"
+            Write-Host "Expected: $EXPECTED_SHA256"
+            Write-Host "Actual:   $ACTUAL_SHA256"
+            exit 1
+          } else {
+            Write-Host "SHA256 checksum verified: OK"
+          }
+
           Get-Item src-tauri/models/ggml-german-turbo.bin
-          Write-Host "Model downloaded"
+          Write-Host "Model downloaded and verified"
 
       - name: Build whisper.cpp for Windows
         shell: pwsh
         run: |
-          Write-Host "Cloning whisper.cpp (pinned to v1.7.3)..."
-          git clone --depth 1 --branch v1.7.3 https://github.com/ggml-org/whisper.cpp.git C:\whisper-build
+          Write-Host "Cloning whisper.cpp (pinned to v1.7.2)..."
+          git clone --depth 1 --branch v1.7.2 https://github.com/ggml-org/whisper.cpp.git C:\whisper-build
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Failed to clone whisper.cpp"
+            exit 1
+          }
           Set-Location C:\whisper-build
+
+          # SECURITY: Verify commit SHA to prevent supply chain attacks
+          $EXPECTED_SHA = "6266a9f9e56a5b925e9892acf650f3eb1245814d"  # v1.7.2
+          $ACTUAL_SHA = git rev-parse HEAD
+
+          if ($ACTUAL_SHA -ne $EXPECTED_SHA) {
+            Write-Host "ERROR: whisper.cpp commit SHA mismatch!"
+            Write-Host "Expected: $EXPECTED_SHA"
+            Write-Host "Actual:   $ACTUAL_SHA"
+            Write-Host "This could indicate a compromised repository or incorrect tag."
+            exit 1
+          }
+          Write-Host "Commit SHA verified: OK (v1.7.2)"
 
           Write-Host "Building for x86_64..."
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
             -DWHISPER_BUILD_EXAMPLES=ON
 
-          cmake --build build --config Release
+          # Build with parallelization
+          $cpuCount = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+          cmake --build build --config Release --parallel $cpuCount
 
-          # Copy binary
-          $BINARY = "build/bin/Release/whisper-cli.exe"
-          if (-not (Test-Path $BINARY)) {
-            $BINARY = "build/bin/whisper-cli.exe"
+          # Find binary (name varies between whisper.cpp versions)
+          Write-Host "Searching for whisper binary..."
+          $binaryPaths = @(
+            "build/bin/Release/main.exe",
+            "build/bin/Release/whisper-cli.exe",
+            "build/bin/main.exe",
+            "build/bin/whisper-cli.exe"
+          )
+
+          $BINARY = $null
+          foreach ($path in $binaryPaths) {
+            if (Test-Path $path) {
+              $BINARY = $path
+              Write-Host "Found binary at: $BINARY"
+              break
+            }
           }
 
-          if (-not (Test-Path $BINARY)) {
-            Write-Host "Binary not found"
+          if (-not $BINARY) {
+            Write-Host "ERROR: No whisper binary found!"
+            Write-Host "Build directory contents:"
+            Get-ChildItem -Recurse build/bin -ErrorAction SilentlyContinue | Select-Object -First 20
             exit 1
           }
 
@@ -151,14 +266,14 @@ jobs:
       # Upload Artifacts
       # ========================================
       - name: Upload MSI for Store
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
         with:
           name: windows-store-msi
           path: src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
           retention-days: 30
 
       - name: Upload WebView2 Installer (for reference)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
         with:
           name: webview2-installer
           path: src-tauri/WebView2RuntimeInstaller.exe
@@ -171,14 +286,10 @@ jobs:
         shell: pwsh
         run: |
           Write-Host ""
-          Write-Host "============================================" -ForegroundColor Cyan
-          Write-Host " Microsoft Store Build Complete!" -ForegroundColor Green
-          Write-Host "============================================" -ForegroundColor Cyan
+          Write-Host "Microsoft Store build complete."
           Write-Host ""
-          Write-Host "Next Steps:" -ForegroundColor Yellow
-          Write-Host "1. Download 'windows-store-msi' artifact"
-          Write-Host "2. Test locally with Windows App Certification Kit"
-          Write-Host "3. Upload MSI to Microsoft Partner Center"
-          Write-Host "4. DO NOT sign - Microsoft signs automatically"
-          Write-Host ""
-          Write-Host "Documentation: docs-dev/how-to/porting/WIN11_MICROSOFT_STORE.md"
+          Write-Host "Next steps:"
+          Write-Host "  1. Download 'windows-store-msi' artifact"
+          Write-Host "  2. Test with Windows App Certification Kit"
+          Write-Host "  3. Upload to Microsoft Partner Center"
+          Write-Host "  4. Do not sign manually (Microsoft handles signing)"

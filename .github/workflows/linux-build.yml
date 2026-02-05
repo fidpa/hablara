@@ -146,7 +146,6 @@ jobs:
           fi
 
           # SECURITY: Verify SHA256 checksum
-          # To get the checksum initially, run: sha256sum src-tauri/models/ggml-german-turbo.bin
           EXPECTED_SHA256="REPLACE_WITH_KNOWN_GOOD_SHA256"
           ACTUAL_SHA256=$(sha256sum src-tauri/models/ggml-german-turbo.bin | awk '{print $1}')
 
@@ -239,8 +238,8 @@ jobs:
           # Improves AppImage compatibility on systems without FUSE
           APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Hablara ${{ github.ref_name }}'
+          tagName: v${{ inputs.version }}
+          releaseName: 'Hablara v${{ inputs.version }}'
           releaseDraft: true
           prerelease: false
           # Skip native RPM (hangs on Ubuntu, Tauri #11478) - use alien fallback instead
