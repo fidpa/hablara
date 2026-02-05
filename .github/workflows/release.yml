@@ -188,6 +188,28 @@ jobs:
           mv /tmp/tauri.conf.json.tmp $GITHUB_WORKSPACE/src-tauri/tauri.conf.json
           echo "✅ Updated tauri.conf.json for universal binary"
 
+      - name: Sign whisper binaries for Notarization
+        run: |
+          SIGNING_IDENTITY="Developer ID Application: Marc Allgeier (94H68V6M99)"
+          BINARIES_DIR="$GITHUB_WORKSPACE/src-tauri/binaries"
+
+          echo "🔏 Signing whisper binaries with Developer ID..."
+
+          for binary in "$BINARIES_DIR"/whisper-*; do
+            echo "  Signing $(basename "$binary")..."
+            codesign --force --options runtime --timestamp \
+              --sign "$SIGNING_IDENTITY" \
+              "$binary"
+          done
+
+          echo "✅ Whisper binaries signed"
+
+          # Verify signatures
+          echo "🔍 Verifying signatures..."
+          for binary in "$BINARIES_DIR"/whisper-*; do
+            codesign -dv --verbose=2 "$binary" 2>&1 | head -5
+          done
+
       # ========================================
       # Build Tauri Universal App
       # ========================================
