@@ -307,14 +307,14 @@ jobs:
             fi
           done
 
-          # Sign main binary
+          # Sign main binary (use direct distribution entitlements - NO sandbox)
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
-            --entitlements src-tauri/entitlements.plist \
+            --entitlements src-tauri/entitlements-direct.plist \
             "$APP_PATH/Contents/MacOS/hablara"
 
-          # Sign the app bundle
+          # Sign the app bundle (use direct distribution entitlements - NO sandbox)
           codesign --force --options runtime --sign "$APPLE_SIGNING_IDENTITY" \
-            --entitlements src-tauri/entitlements.plist \
+            --entitlements src-tauri/entitlements-direct.plist \
             "$APP_PATH"
 
           # Verify
@@ -506,26 +506,26 @@ jobs:
     needs: build-universal
     runs-on: ubuntu-latest
     steps:
-      - name: Publish release
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: false
-          generate_release_notes: true
+      - name: Publish release (remove draft status)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          echo "Publishing release $VERSION..."
+          gh release edit "$VERSION" --draft=false --repo "${{ github.repository }}"
+          echo "✅ Release $VERSION published"
 
-  update-homebrew:
-    name: Update Homebrew Cask
-    needs: publish
-    runs-on: macos-14  # Homebrew requires macOS
-    steps:
-      - name: Install Homebrew dependencies
-        run: brew install-bundler-gems --add-groups=style
-
-      - name: Bump Homebrew Cask
-        uses: macauley/action-homebrew-bump-cask@v1
-        with:
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          cask: hablara
-          tap: fidpa/hablara
-          livecheck: true
+  # TODO: Fix Homebrew Cask update (currently failing with "No Cask with this name exists")
+  # Requires: fidpa/homebrew-hablara tap with hablara.rb cask definition
+  # update-homebrew:
+  #   name: Update Homebrew Cask
+  #   needs: publish
+  #   runs-on: macos-14
+  #   steps:
+  #     - name: Bump Homebrew Cask
+  #       uses: macauley/action-homebrew-bump-cask@v1
+  #       with:
+  #         token: ${{ secrets.TAP_GITHUB_TOKEN }}
+  #         cask: hablara
+  #         tap: fidpa/homebrew-hablara
+  #         livecheck: true
