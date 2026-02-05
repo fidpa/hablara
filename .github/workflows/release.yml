@@ -232,7 +232,7 @@ jobs:
             Siehe [CHANGELOG.md](https://github.com/fidpa/hablara/blob/main/CHANGELOG.md)
           releaseDraft: true
           prerelease: false
-          args: --target universal-apple-darwin
+          args: --target universal-apple-darwin --bundles dmg
 
   publish:
     name: Publish Release
