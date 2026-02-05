@@ -277,7 +277,7 @@ jobs:
   update-homebrew:
     name: Update Homebrew Cask
     needs: publish
-    runs-on: ubuntu-latest
+    runs-on: macos-14  # Homebrew requires macOS
     steps:
       - name: Bump Homebrew Cask
         uses: macauley/action-homebrew-bump-cask@v1
