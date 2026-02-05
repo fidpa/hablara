@@ -20,4 +20,5 @@ pub use macos::*;
 pub use windows::*;
 
 #[cfg(target_os = "linux")]
+#[allow(unused_imports)]
 pub use linux::*;

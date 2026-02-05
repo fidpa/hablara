@@ -20,6 +20,7 @@
 use std::path::PathBuf;
 
 /// Check if MLX is available (always false on Linux - MLX is Apple Silicon only)
+#[allow(dead_code)]
 pub fn is_mlx_available() -> bool {
     false
 }
@@ -28,6 +29,7 @@ pub fn is_mlx_available() -> bool {
 ///
 /// Checks `XDG_SESSION_TYPE` first, falls back to `WAYLAND_DISPLAY`.
 /// Returns `false` if neither indicates Wayland (assumes X11).
+#[allow(dead_code)]
 pub fn is_wayland_session() -> bool {
     if let Ok(session_type) = std::env::var("XDG_SESSION_TYPE") {
         return session_type.eq_ignore_ascii_case("wayland");
@@ -56,6 +58,7 @@ pub fn get_xdg_data_home() -> Result<PathBuf, String> {
 ///
 /// Returns `$XDG_CONFIG_HOME` if set and absolute, otherwise `~/.config`.
 /// Returns an error if the home directory cannot be determined.
+#[allow(dead_code)]
 pub fn get_xdg_config_home() -> Result<PathBuf, String> {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         let path = PathBuf::from(&xdg);

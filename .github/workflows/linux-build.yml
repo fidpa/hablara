@@ -1,5 +1,5 @@
 # ============================================================================
-# Hablara - Linux Build Workflow
+# Hablará - Linux Build Workflow
 # ============================================================================
 # Builds Linux packages (.deb, .rpm, .AppImage) for Hablara desktop app.
 #
@@ -16,9 +16,11 @@
 # - NO_STRIP=true for linuxdeploy ELF bug (Tauri #14796)
 # - Native RPM build with alien fallback (Tauri #11478)
 #
-# Triggers:
-# - Tag push (v*) - creates release artifacts
-# - Manual dispatch - for testing
+# Usage:
+#   1. Go to Actions tab in GitHub
+#   2. Select "Linux Release"
+#   3. Click "Run workflow"
+#   4. Enter version (must match tauri.conf.json)
 #
 # Prerequisites:
 # - whisper.cpp built from source (CMake, pinned v1.7.2)
@@ -29,13 +31,15 @@
 # 2. Update EXPECTED_SHA256 in "Download whisper model" step
 # ============================================================================
 
-name: Linux Build
+name: Linux Release
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.4)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -46,7 +50,7 @@ concurrency:
 
 jobs:
   build-linux:
-    name: Build Linux x64
+    name: Build Linux x64 (v${{ inputs.version }})
     runs-on: ubuntu-22.04  # Required for WebKitGTK 4.1 (Tauri v2)
     timeout-minutes: 45
 
@@ -54,17 +58,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
+      - name: Validate version
+        run: |
+          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          if [ "$TAURI_VERSION" != "${{ inputs.version }}" ]; then
+            echo "❌ Version mismatch! Input: ${{ inputs.version }}, tauri.conf.json: $TAURI_VERSION"
+            exit 1
+          fi
+          echo "✅ Version validated: ${{ inputs.version }}"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
+            libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf \
             libssl-dev \
             libgtk-3-dev \
-            libayatana-appindicator3-dev \
             libjavascriptcoregtk-4.1-dev \
             libasound2-dev \
             cmake \
@@ -186,11 +198,24 @@ jobs:
 
           cmake --build build --config Release -j$(nproc)
 
-          # Find and copy binary
-          BINARY="build/bin/whisper-cli"
-          if [ ! -f "$BINARY" ]; then
-            echo "Binary not found at $BINARY"
-            find build -name "whisper-cli" -type f || true
+          # Find binary (name varies between whisper.cpp versions)
+          echo "Searching for whisper binary..."
+          find build -type f -executable -name "main" -o -name "whisper-cli" -o -name "whisper" 2>/dev/null || true
+
+          # Try different binary names (whisper.cpp v1.7.x uses 'main' for CLI)
+          BINARY=""
+          for name in "build/bin/main" "build/bin/whisper-cli" "build/main" "build/whisper-cli"; do
+            if [ -f "$name" ]; then
+              BINARY="$name"
+              echo "Found binary at: $BINARY"
+              break
+            fi
+          done
+
+          if [ -z "$BINARY" ]; then
+            echo "ERROR: No whisper binary found!"
+            echo "Build directory contents:"
+            find build -type f -executable | head -20
             exit 1
           fi
 
@@ -218,10 +243,11 @@ jobs:
           releaseName: 'Hablara ${{ github.ref_name }}'
           releaseDraft: true
           prerelease: false
-          args: --target x86_64-unknown-linux-gnu
+          # Skip native RPM (hangs on Ubuntu, Tauri #11478) - use alien fallback instead
+          args: --target x86_64-unknown-linux-gnu --bundles deb,appimage
 
       # ========================================
-      # Fallback: Build RPM with alien if native build failed
+      # Build RPM with alien (native RPM disabled due to Tauri #11478)
       # ========================================
       - name: Check if RPM was built
         id: check-rpm
@@ -259,7 +285,7 @@ jobs:
           cd "$DEB_DIR"
 
           echo "Converting $(basename "$DEB_FILE") to RPM..."
-          alien --to-rpm --scripts "$(basename "$DEB_FILE")"
+          sudo alien --to-rpm --scripts "$(basename "$DEB_FILE")"
 
           # Rename to match Tauri naming convention
           RPM_FILE=$(find . -name "hablara-*.rpm" -type f | head -1)
@@ -269,7 +295,7 @@ jobs:
           fi
 
           VERSION=$(basename "$RPM_FILE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          mv "$RPM_FILE" "Hablara-${VERSION}.x86_64.rpm"
+          sudo mv "$RPM_FILE" "Hablara-${VERSION}.x86_64.rpm"
 
           # Validate RPM integrity
           RPM_PATH="Hablara-${VERSION}.x86_64.rpm"
@@ -279,9 +305,10 @@ jobs:
           fi
           echo "RPM integrity validated: OK"
 
-          # Move to RPM bundle directory
-          mkdir -p ../rpm
-          mv Hablara-*.rpm ../rpm/
+          # Move to RPM bundle directory and fix ownership for upload
+          sudo mkdir -p ../rpm
+          sudo mv Hablara-*.rpm ../rpm/
+          sudo chown -R "$(id -u):$(id -g)" ../rpm
           echo "RPM created via alien: Hablara-${VERSION}.x86_64.rpm"
 
       - name: Upload artifacts
