@@ -144,7 +144,7 @@ jobs:
           Write-Host "ONNX Runtime DLL: $($fileSize / 1MB) MB"
 
           # SECURITY: Verify SHA256 checksum of extracted DLL
-          $EXPECTED_ORT_SHA256 = "REPLACE_WITH_KNOWN_GOOD_SHA256"
+          $EXPECTED_ORT_SHA256 = "579b636403983254346a5c1d80bd28f1519cd1e284cd204f8d4ff41f8d711559"
           $ACTUAL_ORT_SHA256 = (Get-FileHash -Path "src-tauri/resources/onnxruntime.dll" -Algorithm SHA256).Hash.ToLower()
 
           if ($EXPECTED_ORT_SHA256 -eq "REPLACE_WITH_KNOWN_GOOD_SHA256") {

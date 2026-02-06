@@ -594,9 +594,10 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Bump Homebrew Cask
-        uses: macauley/action-homebrew-bump-cask@v1
+        # SHA-pinned for supply chain security (v3.8.6)
+        uses: eugenesvk/action-homebrew-bump-cask@6b066272df85c164f0496877387ecc8d989a194f
         with:
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
           cask: hablara
           tap: fidpa/homebrew-hablara
-          livecheck: true
+          no_fork: true  # Push directly to our own tap

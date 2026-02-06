@@ -91,13 +91,9 @@ pub(crate) async fn transcribe_whisper_cpp(
                 .to_str()
                 .expect("output_path contains invalid UTF-8")
                 .trim_end_matches(".txt"),
-            // VAD and Speech Detection parameters to fix "[Musik]" issue
-            "-nth",
-            "0.6", // No-speech threshold (higher = stricter speech detection)
             "-et",
-            "2.4", // Entropy threshold (higher = stricter)
-            "-nf",  // No fallback (disables "[Musik]" labels)
-            "-sns", // Suppress non-speech tokens
+            "2.4", // Entropy threshold (default, stricter = fewer hallucinations)
+            "-nf", // No temperature fallback (reduces "[Musik]" labels)
             "-t",
             "8", // Threads for M4 Pro
         ])
