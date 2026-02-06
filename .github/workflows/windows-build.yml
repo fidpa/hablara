@@ -281,12 +281,17 @@ jobs:
           }
           Write-Host "Commit SHA verified: OK (v1.7.2)"
 
-          Write-Host "Building for x86_64 (static linking)..."
+          Write-Host "Building for x86_64 (static linking, CPU-only)..."
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
             -DBUILD_SHARED_LIBS=OFF `
             -DWHISPER_BUILD_TESTS=OFF `
-            -DWHISPER_BUILD_EXAMPLES=ON
+            -DWHISPER_BUILD_EXAMPLES=ON `
+            -DGGML_CUDA=OFF `
+            -DGGML_OPENCL=OFF `
+            -DGGML_VULKAN=OFF `
+            -DGGML_HIPBLAS=OFF `
+            -DGGML_BLAS=OFF
 
           # Build with parallelization
           $cpuCount = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors

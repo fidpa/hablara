@@ -111,8 +111,13 @@ pub(crate) async fn transcribe_whisper_cpp(
     );
 
     // Run whisper with VAD and speech detection parameters
-    let mut cmd = Command::new(&sidecar_path);
-    cmd.args([
+    let thread_count = thread_count();
+    let output_stem = output_path
+        .to_str()
+        .expect("output_path contains invalid UTF-8")
+        .trim_end_matches(".txt");
+
+    let mut args: Vec<&str> = vec![
         "-m",
         model_path
             .to_str()
@@ -125,18 +130,26 @@ pub(crate) async fn transcribe_whisper_cpp(
         language,
         "-otxt",
         "-of",
-        output_path
-            .to_str()
-            .expect("output_path contains invalid UTF-8")
-            .trim_end_matches(".txt"),
+        output_stem,
         "-et",
         "2.4", // Entropy threshold (default, stricter = fewer hallucinations)
         "-nf", // No temperature fallback (reduces "[Musik]" labels)
         "-t",
-        &thread_count(),
-    ])
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped());
+        &thread_count,
+    ];
+
+    // Disable GPU on Linux and Windows (no GPU acceleration support in current builds).
+    // On macOS ARM, Metal acceleration is available and handled by the binary itself.
+    // Without this flag, whisper.cpp attempts GPU backend init which crashes on systems
+    // without GPU hardware/drivers (exit None = signal termination).
+    if cfg!(target_os = "linux") || cfg!(target_os = "windows") {
+        args.push("-ng"); // --no-gpu: force CPU-only inference
+    }
+
+    let mut cmd = Command::new(&sidecar_path);
+    cmd.args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
 
     // Suppress visible console window on Windows (no effect on pipe functionality)
     #[cfg(target_os = "windows")]
