@@ -119,13 +119,21 @@ set_version_types_ts() {
     fi
 }
 
-set_version_readme_badge() {
-    local file="$1" version="$2"
-    if [[ "$(uname)" == "Darwin" ]]; then
-        sed -i '' "s/version-[0-9][0-9.]*-blue/version-$version-blue/g" "$file"
-    else
-        sed -i "s/version-[0-9][0-9.]*-blue/version-$version-blue/g" "$file"
-    fi
+set_version_readme() {
+    local file="$1" new_version="$2" old_version="$3"
+    local sed_i=(-i)
+    [[ "$(uname)" == "Darwin" ]] && sed_i=(-i '')
+
+    # 1. Badge: version-X.Y.Z-blue
+    sed "${sed_i[@]}" "s/version-[0-9][0-9.]*-blue/version-$new_version-blue/g" "$file"
+
+    # 2. Filenames in install commands: hablara_X.Y.Z_ and hablara-X.Y.Z-
+    #    (underscore/hyphen before version, NOT "v" prefix = not historical)
+    sed "${sed_i[@]}" "s/hablara_${old_version}_/hablara_${new_version}_/g" "$file"
+    sed "${sed_i[@]}" "s/hablara-${old_version}-/hablara-${new_version}-/g" "$file"
+
+    # 3. Footer: **Version:** X.Y.Z
+    sed "${sed_i[@]}" "s/\*\*Version:\*\* ${old_version}/\*\*Version:\*\* ${new_version}/g" "$file"
 }
 
 set_version_claude_md() {
@@ -310,7 +318,7 @@ set_version_types_ts "$TYPES_TS" "$NEW_VERSION"
 log_success "types.ts: $NEW_VERSION"
 
 log_info "Updating README.md..."
-grep -q "version-[0-9][0-9.]*-blue" "$README_MD" && set_version_readme_badge "$README_MD" "$NEW_VERSION" && log_success "README.md: badge updated" || log_warn "README.md: no badge"
+set_version_readme "$README_MD" "$NEW_VERSION" "$CURRENT_NPM" && log_success "README.md: badge + filenames + footer updated" || log_warn "README.md: update failed"
 
 log_info "Updating CLAUDE.md..."
 grep -q "Version:" "$CLAUDE_MD" && set_version_claude_md "$CLAUDE_MD" "$NEW_VERSION" && log_success "CLAUDE.md: updated" || log_warn "CLAUDE.md: no version refs"
@@ -336,20 +344,6 @@ if [[ "$FINAL_NPM" != "$NEW_VERSION" || "$FINAL_CARGO" != "$NEW_VERSION" || "$FI
 fi
 log_success "All versions synchronized"
 
-log_step "Creating git commit and tag"
-
-git add -A
-if [[ -n "$UNCOMMITTED_CHANGES" ]]; then
-    git commit -m "chore: release v$NEW_VERSION"
-    log_success "Commit created (includes all changes)"
-else
-    git commit -m "chore: bump version to v$NEW_VERSION"
-    log_success "Commit created"
-fi
-
-git tag "v$NEW_VERSION"
-log_success "Tag created: v$NEW_VERSION"
-
 # ============================================================================
 # Summary
 # ============================================================================
@@ -358,11 +352,9 @@ echo ""
 echo -e "${GREEN}Version Bump Complete!${NC}"
 echo ""
 echo "  Version:  ${BLUE}$CURRENT_NPM${NC} -> ${GREEN}$NEW_VERSION${NC}"
-echo "  Tag:      v$NEW_VERSION"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
+echo "  git add -A && git commit -m \"chore: release v$NEW_VERSION\""
+echo "  git tag v$NEW_VERSION"
 echo "  git push origin $CURRENT_BRANCH --tags"
-echo "  gh release create v$NEW_VERSION"
-echo ""
-echo -e "${BLUE}Rollback:${NC} git reset --hard HEAD~1 && git tag -d v$NEW_VERSION"
 echo ""

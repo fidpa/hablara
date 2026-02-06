@@ -19,6 +19,7 @@ import type {
 } from "../response-parsers";
 import { filterCriticalContent } from "../../safety-filter";
 import { stripMarkdownCodeBlock } from "../helpers/strip-markdown-wrapper";
+import { corsSafeFetch } from "../helpers/tauri-fetch";
 
 // MLX_INVOKE_TIMEOUT imported from types.ts
 
@@ -60,7 +61,7 @@ export class OllamaClient extends BaseLLMClient {
       : timeoutSignal;
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/generate`, {
+      const response = await corsSafeFetch(`${this.baseUrl}/api/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,7 +75,7 @@ export class OllamaClient extends BaseLLMClient {
           },
         }),
         signal: combinedSignal,
-      });
+      }, "OllamaClient");
 
       if (!response.ok) {
         const rawError = await response.text();
@@ -93,10 +94,10 @@ export class OllamaClient extends BaseLLMClient {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`, {
+      const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(LLM_LOCAL_HEALTH_CHECK_TIMEOUT),
-      });
+      }, "OllamaClient");
       return response.ok;
     } catch {
       return false;
@@ -109,10 +110,10 @@ export class OllamaClient extends BaseLLMClient {
    */
   async verifyModelStatus(): Promise<{ available: boolean; modelExists: boolean }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/tags`, {
+      const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
         signal: AbortSignal.timeout(LLM_LOCAL_HEALTH_CHECK_TIMEOUT),
-      });
+      }, "OllamaClient");
 
       if (!response.ok) {
         return { available: false, modelExists: false };

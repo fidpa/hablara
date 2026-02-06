@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)][releases]
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 [![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
@@ -114,20 +114,20 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Debian/Ubuntu (.deb):**
 ```bash
-sudo dpkg -i hablara_1.0.9_amd64.deb
+sudo dpkg -i hablara_1.1.0_amd64.deb
 sudo apt-get install -f  # Falls Abhängigkeiten fehlen
 ```
 
 **Fedora/RHEL (.rpm):**
 ```bash
-sudo rpm -i hablara-1.0.9-1.x86_64.rpm
-# oder: sudo dnf install hablara-1.0.9-1.x86_64.rpm
+sudo rpm -i hablara-1.1.0-1.x86_64.rpm
+# oder: sudo dnf install hablara-1.1.0-1.x86_64.rpm
 ```
 
 **AppImage (Universal, keine Installation nötig):**
 ```bash
-chmod +x hablara_1.0.9_amd64.AppImage
-./hablara_1.0.9_amd64.AppImage
+chmod +x hablara_1.1.0_amd64.AppImage
+./hablara_1.1.0_amd64.AppImage
 ```
 
 AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) ins Anwendungsmenü integriert werden.
@@ -875,7 +875,7 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.9
+**Autor:** Marc Allgeier | **Version:** 1.1.0
 
 ---
 

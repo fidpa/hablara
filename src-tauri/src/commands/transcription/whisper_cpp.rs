@@ -6,6 +6,14 @@ use serde::Serialize;
 use std::process::Stdio;
 use tokio::process::Command;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+/// Windows creation flag to suppress visible console window for child processes.
+/// See: https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 use crate::commands::utils::{find_whisper_paths, get_target_triple, parse_whisper_stdout};
 
 /// Platform-aware setup script hint for error messages
@@ -103,32 +111,38 @@ pub(crate) async fn transcribe_whisper_cpp(
     );
 
     // Run whisper with VAD and speech detection parameters
-    let output = Command::new(&sidecar_path)
-        .args([
-            "-m",
-            model_path
-                .to_str()
-                .expect("model_path contains invalid UTF-8"),
-            "-f",
-            audio_path
-                .to_str()
-                .expect("audio_path contains invalid UTF-8"),
-            "-l",
-            language,
-            "-otxt",
-            "-of",
-            output_path
-                .to_str()
-                .expect("output_path contains invalid UTF-8")
-                .trim_end_matches(".txt"),
-            "-et",
-            "2.4", // Entropy threshold (default, stricter = fewer hallucinations)
-            "-nf", // No temperature fallback (reduces "[Musik]" labels)
-            "-t",
-            &thread_count()
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+    let mut cmd = Command::new(&sidecar_path);
+    cmd.args([
+        "-m",
+        model_path
+            .to_str()
+            .expect("model_path contains invalid UTF-8"),
+        "-f",
+        audio_path
+            .to_str()
+            .expect("audio_path contains invalid UTF-8"),
+        "-l",
+        language,
+        "-otxt",
+        "-of",
+        output_path
+            .to_str()
+            .expect("output_path contains invalid UTF-8")
+            .trim_end_matches(".txt"),
+        "-et",
+        "2.4", // Entropy threshold (default, stricter = fewer hallucinations)
+        "-nf", // No temperature fallback (reduces "[Musik]" labels)
+        "-t",
+        &thread_count(),
+    ])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped());
+
+    // Suppress visible console window on Windows (no effect on pipe functionality)
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd
         .output()
         .await
         .map_err(|e| format!("Failed to run whisper: {}", e))?;

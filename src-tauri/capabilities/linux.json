@@ -31,7 +31,7 @@
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
     "dialog:allow-save",
-"fs:allow-read-text-file",
+    "fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-document-read",
     "fs:allow-document-write",
@@ -47,7 +47,9 @@
       "identifier": "http:default",
       "allow": [
         { "url": "https://api.anthropic.com/**" },
-        { "url": "https://api.openai.com/**" }
+        { "url": "https://api.openai.com/**" },
+        { "url": "http://localhost/**" },
+        { "url": "http://127.0.0.1/**" }
       ]
     }
   ]

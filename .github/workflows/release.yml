@@ -369,9 +369,19 @@ jobs:
           codesign --verify --deep --strict "$APP_PATH"
           echo "✅ App signed and verified"
 
+      - name: Install create-dmg
+        run: brew install create-dmg
+
       - name: Create DMG
         run: |
           APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Hablara.app"
+
+          # Verify app bundle exists before DMG creation
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::App bundle not found at $APP_PATH"
+            exit 1
+          fi
+
           VERSION="${{ github.ref_name }}"
           VERSION="${VERSION#v}"  # Remove 'v' prefix
           DMG_NAME="Hablara_${VERSION}_universal.dmg"
@@ -379,9 +389,33 @@ jobs:
 
           mkdir -p "$(dirname "$DMG_PATH")"
 
-          # Create DMG using hdiutil
-          hdiutil create -volname "Hablara" -srcfolder "$APP_PATH" \
-            -ov -format UDZO "$DMG_PATH"
+          # Staging directory with app for create-dmg
+          STAGING_DIR=$(mktemp -d)
+          cp -R "$APP_PATH" "$STAGING_DIR/"
+
+          # Create professional DMG with Applications symlink and icon layout
+          # --sandbox-safe: creates .DS_Store internally (no Finder/AppleScript needed for headless CI)
+          # Layout: App icon left (180,190), Applications symlink right (480,190)
+          # Exit code 2 = disk image size was adjusted (not an error)
+          create-dmg \
+            --volname "Hablará" \
+            --volicon "$GITHUB_WORKSPACE/icons/icon.icns" \
+            --sandbox-safe \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 100 \
+            --icon "Hablara.app" 180 190 \
+            --hide-extension "Hablara.app" \
+            --app-drop-link 480 190 \
+            --text-size 14 \
+            --no-internet-enable \
+            --format UDZO \
+            --hdiutil-retries 5 \
+            "$DMG_PATH" \
+            "$STAGING_DIR/" \
+            || test $? -eq 2
+
+          rm -rf "$STAGING_DIR"
 
           echo "✅ DMG created: $DMG_PATH"
           ls -lh "$DMG_PATH"

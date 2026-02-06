@@ -16,6 +16,7 @@ import { LLM_GENERATION_PARAMS } from "../helpers/analysis-config";
 import { filterCriticalContent } from "../../safety-filter";
 import { sanitizeErrorMessage } from "../helpers/error-sanitizer";
 import { stripMarkdownCodeBlock } from "../helpers/strip-markdown-wrapper";
+import { corsSafeFetch } from "../helpers/tauri-fetch";
 
 export class OpenAIClient extends BaseLLMClient {
   private apiKey: string | null = null;
@@ -56,7 +57,7 @@ export class OpenAIClient extends BaseLLMClient {
       : timeoutSignal;
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await corsSafeFetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -70,7 +71,7 @@ export class OpenAIClient extends BaseLLMClient {
           top_p: LLM_GENERATION_PARAMS.topP,
         }),
         signal: combinedSignal,
-      });
+      }, "OpenAIClient");
 
       if (!response.ok) {
         const rawError = await response.text();
@@ -93,11 +94,11 @@ export class OpenAIClient extends BaseLLMClient {
       const apiKey = await this.ensureAPIKey();
 
       // Ping OpenAI models endpoint (lightweight, no billing)
-      const response = await fetch("https://api.openai.com/v1/models", {
+      const response = await corsSafeFetch("https://api.openai.com/v1/models", {
         method: "GET",
         headers: { Authorization: `Bearer ${apiKey}` },
         signal: AbortSignal.timeout(LLM_HEALTH_CHECK_TIMEOUT),
-      });
+      }, "OpenAIClient");
 
       // API reachable if we get ANY HTTP response (not a network error)
       // 200 = success, 401 = auth error, 429 = rate limit
@@ -122,7 +123,7 @@ export class OpenAIClient extends BaseLLMClient {
       : timeoutSignal;
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await corsSafeFetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -136,7 +137,7 @@ export class OpenAIClient extends BaseLLMClient {
           top_p: LLM_GENERATION_PARAMS.topP,
         }),
         signal: combinedSignal,
-      });
+      }, "OpenAIClient");
 
       if (!response.ok) {
         const rawError = await response.text();

@@ -14,6 +14,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OllamaClient } from '@/lib/llm';
 import type { LLMConfig } from '@/lib/types';
 
+// Mock tauri-fetch to bypass async Tauri plugin loading in tests.
+// corsSafeFetch delegates directly to global.fetch (which tests spy on).
+vi.mock('@/lib/llm/helpers/tauri-fetch', () => ({
+  corsSafeFetch: (url: string, init: RequestInit) => fetch(url, init),
+  getTauriFetch: () => Promise.resolve(null),
+}));
+
 describe('LLM Timeout & AbortSignal Support', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
   let abortSignalTimeoutSpy: ReturnType<typeof vi.spyOn>;

@@ -19,56 +19,16 @@ import { LLM_GENERATION_PARAMS } from "../helpers/analysis-config";
 import { filterCriticalContent } from "../../safety-filter";
 import { sanitizeErrorMessage } from "../helpers/error-sanitizer";
 import { stripMarkdownCodeBlock } from "../helpers/strip-markdown-wrapper";
+import { corsSafeFetch, getTauriFetch } from "../helpers/tauri-fetch";
 
 const ANTHROPIC_VERSION = "2023-06-01";
-
-// Tauri fetch lazy-loaded to avoid SSR issues
-let tauriFetchPromise: Promise<typeof fetch | null> | null = null;
-
-/**
- * Get Tauri fetch function (lazy-loaded)
- * Returns null in non-Tauri environment
- */
-async function getTauriFetch(): Promise<typeof fetch | null> {
-  // SSR guard
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  // Check for Tauri environment
-  const hasTauri = "__TAURI_INTERNALS__" in window;
-
-  if (!hasTauri) {
-    return null;
-  }
-
-  // Lazy load the plugin (reset on failure to allow retry)
-  if (!tauriFetchPromise) {
-    tauriFetchPromise = import("@tauri-apps/plugin-http")
-      .then((m) => {
-        logger.info("AnthropicClient", "Tauri HTTP plugin loaded successfully");
-        return m.fetch;
-      })
-      .catch((err) => {
-        logger.error("AnthropicClient", "Failed to load Tauri HTTP plugin", err);
-        // Reset promise to allow retry on next call
-        tauriFetchPromise = null;
-        return null;
-      });
-  }
-
-  return tauriFetchPromise;
-}
 
 /**
  * CORS-safe fetch for Anthropic API
  *
- * Priority:
- * 1. Tauri HTTP plugin (bypasses CORS, no header needed)
- * 2. Native fetch with anthropic-dangerous-direct-browser-access header
- *
- * The CORS header is required by Anthropic for browser requests.
- * In Tauri desktop app, this is a fallback when plugin fails to load.
+ * Extends corsSafeFetch with Anthropic-specific CORS header fallback.
+ * When Tauri HTTP plugin is unavailable (browser/dev mode), adds the
+ * anthropic-dangerous-direct-browser-access header required by Anthropic.
  */
 async function anthropicFetch(url: string, init: RequestInit): Promise<Response> {
   const tauriFetch = await getTauriFetch();
@@ -124,11 +84,12 @@ export class AnthropicClient extends BaseLLMClient {
   protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal): Promise<string> {
     const apiKey = await this.ensureAPIKey();
 
-    // AbortSignal Strategy:
-    // - If user provides signal: Trust it (user controls abort + timeout)
-    // - Otherwise: Use internal timeout signal as protection
-    // - Tauri HTTP plugin has limited AbortSignal support, so we keep it simple
+    // Combine user-provided signal with timeout signal (prevents infinite hang)
+    // Aligned with OllamaClient/OpenAIClient pattern - both signals active simultaneously
     const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
+    const combinedSignal = signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal;
 
     try {
       const response = await anthropicFetch("https://api.anthropic.com/v1/messages", {
@@ -146,7 +107,7 @@ export class AnthropicClient extends BaseLLMClient {
           temperature: LLM_GENERATION_PARAMS.temperature,
           messages: [{ role: "user", content: prompt }],
         }),
-        signal: signal ?? timeoutSignal,
+        signal: combinedSignal,
       });
 
       if (!response.ok) {
@@ -227,8 +188,11 @@ export class AnthropicClient extends BaseLLMClient {
     const systemMessage = messages.find((m) => m.role === "system")?.content || "";
     const chatMessages = messages.filter((m) => m.role !== "system");
 
-    // AbortSignal Strategy: User signal takes precedence, fallback to timeout
+    // Combine user-provided signal with timeout signal (prevents infinite hang)
     const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
+    const combinedSignal = options?.signal
+      ? AbortSignal.any([options.signal, timeoutSignal])
+      : timeoutSignal;
 
     try {
       const response = await anthropicFetch("https://api.anthropic.com/v1/messages", {
@@ -247,7 +211,7 @@ export class AnthropicClient extends BaseLLMClient {
           ...(systemMessage && { system: systemMessage }),
           messages: chatMessages,
         }),
-        signal: options?.signal ?? timeoutSignal,
+        signal: combinedSignal,
       });
 
       if (!response.ok) {
