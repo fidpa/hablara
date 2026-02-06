@@ -486,6 +486,13 @@ create_custom_model() {
 
   log_info "Erstelle optimiertes Custom-Modell..."
 
+  # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
+  local script_dir external_modelfile=""
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+  local modelfile_name="${MODEL_NAME/:/-}-custom.modelfile"
+  [[ -n "$script_dir" && -f "${script_dir}/ollama/${modelfile_name}" ]] && \
+    external_modelfile="${script_dir}/ollama/${modelfile_name}"
+
   local modelfile
   modelfile=$(mktemp -t hablara-modelfile.XXXXXX)
   chmod 600 "$modelfile"
@@ -493,15 +500,34 @@ create_custom_model() {
   # ${modelfile:-} prevents "unbound variable" when RETURN trap leaks to caller
   trap 'rm -f -- "${modelfile:-}"' RETURN
 
-  cat > "${modelfile}" <<EOF
+  if [[ -n "$external_modelfile" ]]; then
+    log_info "Verwende optimiertes Modelfile: ${modelfile_name}"
+    cp "$external_modelfile" "$modelfile"
+  else
+    log_info "Kein spezifisches Modelfile gefunden, verwende generisches"
+    cat > "${modelfile}" <<EOF
 FROM ${MODEL_NAME}
 
+PARAMETER num_ctx 8192
 PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.1
 
-SYSTEM You are an expert in psychology, communication analysis, and logical reasoning. Analyze text for emotions, cognitive biases, and logical fallacies with high accuracy.
+SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+
+Deine Aufgaben:
+1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
+2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
+3. JSON Output: Antworte IMMER in gültigem JSON-Format
+
+Wichtig:
+- Sei präzise und objektiv
+- Berücksichtige deutschen Sprachgebrauch und Kultur
+- Gib strukturierte Antworten (JSON Schema)
+- Keine Halluzinationen oder erfundene Details
+"""
 EOF
+  fi
 
   local create_result=0
   ollama create "${CUSTOM_MODEL_NAME}" -f "${modelfile}" || create_result=$?

@@ -419,15 +419,40 @@ function New-CustomModel {
 
     Write-Info "Creating optimized custom model..."
 
-    $modelfileContent = @"
+    # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
+    $modelfileName = ($ModelName -replace ':', '-') + "-custom.modelfile"
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path 2>$null
+    $externalModelfile = if ($scriptDir) { Join-Path $scriptDir "ollama\$modelfileName" } else { "" }
+
+    $modelfileContent = ""
+    if ($externalModelfile -and (Test-Path $externalModelfile)) {
+        Write-Info "Verwende optimiertes Modelfile: $modelfileName"
+        $modelfileContent = [System.IO.File]::ReadAllText($externalModelfile)
+    } else {
+        Write-Info "Kein spezifisches Modelfile gefunden, verwende generisches"
+        $modelfileContent = @"
 FROM $ModelName
 
+PARAMETER num_ctx 8192
 PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.1
 
-SYSTEM You are an expert in psychology, communication analysis, and logical reasoning. Analyze text for emotions, cognitive biases, and logical fallacies with high accuracy.
+SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+
+Deine Aufgaben:
+1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
+2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
+3. JSON Output: Antworte IMMER in gültigem JSON-Format
+
+Wichtig:
+- Sei präzise und objektiv
+- Berücksichtige deutschen Sprachgebrauch und Kultur
+- Gib strukturierte Antworten (JSON Schema)
+- Keine Halluzinationen oder erfundene Details
+"""
 "@
+    }
 
     $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$(Get-Random).tmp"
 
