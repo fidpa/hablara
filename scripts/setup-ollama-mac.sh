@@ -225,18 +225,19 @@ get_system_ram_gb() {
 }
 
 show_model_menu() {
-  echo ""
-  echo -e "${COLOR_CYAN}Wähle ein Modell:${COLOR_RESET}"
-  echo ""
-  echo "  1) 3b  - qwen2.5:3b   (~2GB, schnell, weniger genau)"
-  echo "  2) 7b  - qwen2.5:7b   (~4.7GB, ausgewogen) [EMPFOHLEN]"
-  echo "  3) 14b - qwen2.5:14b  (~9GB, genauer)"
-  echo "  4) 32b - qwen2.5:32b  (~20GB, beste Qualität, 32GB+ RAM)"
-  echo ""
-  echo -n "Auswahl [1-4, Enter=2]: "
+  # Print menu to stderr so stdout only contains the result
+  echo "" >&2
+  echo -e "${COLOR_CYAN}Wähle ein Modell:${COLOR_RESET}" >&2
+  echo "" >&2
+  echo "  1) 3b  - qwen2.5:3b   (~2GB, schnell, weniger genau)" >&2
+  echo "  2) 7b  - qwen2.5:7b   (~4.7GB, ausgewogen) [EMPFOHLEN]" >&2
+  echo "  3) 14b - qwen2.5:14b  (~9GB, genauer)" >&2
+  echo "  4) 32b - qwen2.5:32b  (~20GB, beste Qualität, 32GB+ RAM)" >&2
+  echo "" >&2
+  echo -n "Auswahl [1-4, Enter=2]: " >&2
 
   local choice
-  read -r choice
+  read -r choice </dev/tty
   case "$choice" in
     1) echo "3b" ;; 2) echo "7b" ;; 3) echo "14b" ;; 4) echo "32b" ;; *) echo "7b" ;;
   esac
@@ -266,7 +267,8 @@ select_model() {
   done
 
   if [[ -z "$requested_model" ]]; then
-    [[ -t 0 && -t 1 ]] && requested_model=$(show_model_menu) || requested_model="$DEFAULT_MODEL"
+    # /dev/tty allows interactive input even when piped via curl | bash
+    [[ -e /dev/tty ]] && requested_model=$(show_model_menu) || requested_model="$DEFAULT_MODEL"
   fi
 
   if ! parse_model_config "$requested_model"; then
@@ -286,9 +288,9 @@ select_model() {
       log_warn "Dein System hat nur ${system_ram}GB RAM"
       echo ""
 
-      if [[ -t 0 && -t 1 ]]; then
+      if [[ -e /dev/tty ]]; then
         echo -n "Trotzdem fortfahren? [j/N]: "
-        local confirm; read -r confirm
+        local confirm; read -r confirm </dev/tty
         [[ ! "$confirm" =~ ^[jJyY]$ ]] && { log_info "Abgebrochen."; exit 0; }
       else
         log_warn "Nicht-interaktiver Modus: Fahre trotzdem fort"
@@ -488,7 +490,8 @@ create_custom_model() {
   modelfile=$(mktemp -t hablara-modelfile.XXXXXX)
   chmod 600 "$modelfile"
   # Cleanup on function exit (including Ctrl+C)
-  trap 'rm -f -- "$modelfile"' RETURN
+  # ${modelfile:-} prevents "unbound variable" when RETURN trap leaks to caller
+  trap 'rm -f -- "${modelfile:-}"' RETURN
 
   cat > "${modelfile}" <<EOF
 FROM ${MODEL_NAME}

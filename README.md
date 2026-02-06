@@ -137,7 +137,7 @@ AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImage
 #### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash
 ```
 
 <details>
