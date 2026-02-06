@@ -6,7 +6,7 @@
  * Single source of truth for version display across the app.
  * Must be kept in sync with package.json version.
  */
-export const APP_VERSION = "1.1.1" as const;
+export const APP_VERSION = "1.1.2" as const;
 
 /**
  * Application developer information.

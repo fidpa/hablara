@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)][releases]
+[![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 [![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
@@ -91,9 +91,10 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama (falls nicht vorhanden)
-2. Lädt qwen2.5:7b Modell (~4.7 GB)
+2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
+
 
 </details>
 
@@ -114,20 +115,20 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Debian/Ubuntu (.deb):**
 ```bash
-sudo dpkg -i hablara_1.1.1_amd64.deb
+sudo dpkg -i hablara_1.1.2_amd64.deb
 sudo apt-get install -f  # Falls Abhängigkeiten fehlen
 ```
 
 **Fedora/RHEL (.rpm):**
 ```bash
-sudo rpm -i hablara-1.1.1-1.x86_64.rpm
-# oder: sudo dnf install hablara-1.1.1-1.x86_64.rpm
+sudo rpm -i hablara-1.1.2-1.x86_64.rpm
+# oder: sudo dnf install hablara-1.1.2-1.x86_64.rpm
 ```
 
 **AppImage (Universal, keine Installation nötig):**
 ```bash
-chmod +x hablara_1.1.1_amd64.AppImage
-./hablara_1.1.1_amd64.AppImage
+chmod +x hablara_1.1.2_amd64.AppImage
+./hablara_1.1.2_amd64.AppImage
 ```
 
 AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) ins Anwendungsmenü integriert werden.
@@ -144,9 +145,10 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama (falls nicht vorhanden)
-2. Lädt qwen2.5:7b Modell (~4.7 GB)
+2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
+
 
 </details>
 
@@ -236,9 +238,10 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scr
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama via winget (falls nicht vorhanden)
-2. Lädt qwen2.5:7b Modell (~4.7 GB)
+2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
+
 
 </details>
 
@@ -438,7 +441,7 @@ Jetzt weiß ich, wie ich das angehen will."
 
 **Warum Qwen 2.5 als Modell?**
 - **Mehrsprachig trainiert:** Inkl. Deutsch
-- **Balanced Size:** 7B Parameter bietet einen guten Kompromiss zwischen Qualität und Latenz
+- **4 Größen wählbar:** 3B (~2 GB, CPU-only), 7B (~4.7 GB, Standard), 14B (~9 GB), 32B (~20 GB)
 - **JSON Compliance:** Zuverlässige strukturierte Outputs für unsere Prompt-Architektur
 - **Angepasstes Modelfile:** Reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
 
@@ -561,14 +564,22 @@ ollama --version  # Falls installiert: Springe zu Schritt 2
 # Oder: https://ollama.ai/download
 ```
 
-**Schritt 2: Basis-Modell herunterladen** (4.7 GB, einmalig)
+**Schritt 2: Basis-Modell herunterladen** (einmalig)
 ```bash
+# Standard (7B, ~4.7 GB - empfohlen)
 ollama pull qwen2.5:7b
+
+# Oder: Lightweight (3B, ~2 GB - für CPU-only / wenig RAM)
+ollama pull qwen2.5:3b
 ```
 
 **Schritt 3: Hablará-optimiertes Modell erstellen**
 ```bash
+# Für 7B:
 ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile
+
+# Für 3B:
+ollama create qwen2.5:3b-custom -f scripts/ollama/qwen2.5-3b-custom.modelfile
 ```
 
 **LLM-Anbieter Alternativen:**
@@ -620,7 +631,7 @@ Hablará unterstützt drei LLM-Anbieter:
 **Linux:** Ja, vollständig unterstützt (x64, Ubuntu 20.04+). Download: .deb, .rpm oder .AppImage im [GitHub Releases][releases].
 
 ### Wie groß ist das Ollama-Model?
-**~4.7 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
+**~4.7 GB** (qwen2.5:7b, Standard). Weitere Varianten: 3b (~2 GB), 14b (~9 GB), 32b (~20 GB) - wählbar im Setup-Skript oder in den Einstellungen.
 
 ### Wo speichert Hablará Daten?
 
@@ -753,7 +764,7 @@ Shift+D) Stille                   Fehlschluss
 |-------|-------------|-------|
 | **Frontend** | Next.js 14, React 18, TailwindCSS | UI, State Management |
 | **Desktop** | Tauri 2.0, Rust 1.70+ | Native Audio, IPC, Storage |
-| **AI/ML** | whisper.cpp (german-turbo), Ollama (qwen2.5:7b) | STT, LLM Enrichment |
+| **AI/ML** | whisper.cpp (german-turbo), Ollama (qwen2.5:3b/7b/14b/32b) | STT, LLM Enrichment |
 | **VAD** | Silero VAD v4 (ONNX, 1.8 MB) | Voice Activity Detection |
 | **Embedding** | paraphrase-multilingual-MiniLM-L12-v2 (ONNX INT8, 118 MB) | RAG Semantic Search |
 | **Security** | keyring-rs (OS-native Keychain) | API Key Verschlüsselung |
@@ -875,7 +886,7 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.1.1
+**Autor:** Marc Allgeier | **Version:** 1.1.2
 
 ---
 
