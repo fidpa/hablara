@@ -140,45 +140,86 @@ jobs:
       - name: Build whisper.cpp for Universal Binary
         run: |
           set -e
-          echo "📦 Cloning whisper.cpp..."
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          echo "📦 Cloning whisper.cpp (pinned to v1.7.2)..."
+          git clone --depth 1 --branch v1.7.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
           cd /tmp/whisper-build
 
+          # SECURITY: Verify commit SHA to prevent supply chain attacks
+          EXPECTED_SHA="6266a9f9e56a5b925e9892acf650f3eb1245814d"  # v1.7.2
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "❌ whisper.cpp commit SHA mismatch!"
+            echo "Expected: $EXPECTED_SHA"
+            echo "Actual:   $ACTUAL_SHA"
+            exit 1
+          fi
+          echo "✅ Commit SHA verified: OK (v1.7.2)"
+
           # Build for aarch64 (Apple Silicon with Metal)
-          echo "🔨 Building for aarch64 (Metal)..."
+          # BUILD_SHARED_LIBS=OFF ensures static linking (no @rpath dylib dependencies)
+          echo "🔨 Building for aarch64 (Metal, static)..."
           cmake -B build-arm64 \
             -S . \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DGGML_METAL=ON \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON
 
           cmake --build build-arm64 --config Release -j$(sysctl -n hw.ncpu)
 
           # Build for x86_64 (Intel) - cross-compile on ARM64 runner (FREE!)
-          echo "🔨 Building for x86_64..."
+          echo "🔨 Building for x86_64 (static)..."
           cmake -B build-x64 \
             -S . \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_METAL=OFF
 
           cmake --build build-x64 --config Release -j$(sysctl -n hw.ncpu)
 
-          # Verify binaries
-          ARM_BIN="build-arm64/bin/whisper-cli"
-          X64_BIN="build-x64/bin/whisper-cli"
+          # Find binaries (whisper.cpp v1.7.x uses 'main' for CLI)
+          echo "🔍 Searching for whisper binary..."
+          ARM_BIN=""
+          X64_BIN=""
+          for name in "build-arm64/bin/whisper-cli" "build-arm64/bin/main"; do
+            if [ -f "$name" ]; then ARM_BIN="$name"; break; fi
+          done
+          for name in "build-x64/bin/whisper-cli" "build-x64/bin/main"; do
+            if [ -f "$name" ]; then X64_BIN="$name"; break; fi
+          done
 
-          if [ ! -f "$ARM_BIN" ] || [ ! -f "$X64_BIN" ]; then
+          if [ -z "$ARM_BIN" ] || [ -z "$X64_BIN" ]; then
             echo "❌ Binaries not found"
+            echo "arm64 build/bin contents:"
+            ls -la build-arm64/bin/ || true
+            echo "x64 build/bin contents:"
+            ls -la build-x64/bin/ || true
             exit 1
           fi
 
           echo "🔍 Verifying architectures..."
           lipo -info "$ARM_BIN"
           lipo -info "$X64_BIN"
+
+          # Verify static linking (no @rpath dependencies)
+          echo "🔍 Verifying static linking..."
+          if otool -L "$ARM_BIN" | grep -q '@rpath'; then
+            echo "❌ ERROR: arm64 binary has @rpath dependencies (not statically linked)!"
+            otool -L "$ARM_BIN"
+            exit 1
+          fi
+          if otool -L "$X64_BIN" | grep -q '@rpath'; then
+            echo "❌ ERROR: x64 binary has @rpath dependencies (not statically linked)!"
+            otool -L "$X64_BIN"
+            exit 1
+          fi
+          echo "✅ Both binaries are statically linked"
 
           # Install to Tauri binaries
           mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
@@ -455,13 +496,45 @@ jobs:
 
       - name: Build whisper.cpp (ARM64 only)
         run: |
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          git clone --depth 1 --branch v1.7.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
           cd /tmp/whisper-build
-          cmake -B build -DCMAKE_OSX_ARCHITECTURES=arm64 -DGGML_METAL=ON -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_EXAMPLES=ON
+          # SECURITY: Verify commit SHA
+          EXPECTED_SHA="6266a9f9e56a5b925e9892acf650f3eb1245814d"
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "❌ whisper.cpp commit SHA mismatch! Expected: $EXPECTED_SHA, Actual: $ACTUAL_SHA"
+            exit 1
+          fi
+          echo "✅ SHA verified (v1.7.2)"
+          cmake -B build \
+            -S . \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DGGML_METAL=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON
           cmake --build build --config Release -j$(sysctl -n hw.ncpu)
+          # Find binary (v1.7.x uses 'main', newer uses 'whisper-cli')
+          BINARY=""
+          for name in "build/bin/whisper-cli" "build/bin/main"; do
+            if [ -f "$name" ]; then BINARY="$name"; break; fi
+          done
+          if [ -z "$BINARY" ]; then
+            echo "❌ No whisper binary found!"
+            ls -la build/bin/ || true
+            exit 1
+          fi
           mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries
-          cp build/bin/whisper-cli $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin
+          cp "$BINARY" $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin
           chmod +x $GITHUB_WORKSPACE/src-tauri/binaries/whisper-*
+          # Verify static linking
+          if otool -L $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin | grep -q '@rpath'; then
+            echo "❌ Binary has @rpath dependencies!"
+            otool -L $GITHUB_WORKSPACE/src-tauri/binaries/whisper-aarch64-apple-darwin
+            exit 1
+          fi
+          echo "✅ Statically linked"
 
       - name: Build frontend explicitly
         run: |

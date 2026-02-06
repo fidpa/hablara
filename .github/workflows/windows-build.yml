@@ -89,6 +89,100 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # ========================================
+      # Download ONNX Runtime for Windows (VAD)
+      # ========================================
+      - name: Cache ONNX Runtime
+        id: cache-onnxruntime
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57  # v4.2.0
+        with:
+          path: src-tauri/resources/onnxruntime.dll
+          key: onnxruntime-1.22.0-win-x64
+
+      - name: Download ONNX Runtime
+        if: steps.cache-onnxruntime.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ORT_VERSION = "1.22.0"
+          $ORT_URL = "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-win-x64-${ORT_VERSION}.zip"
+          $TEMP_ZIP = "$env:TEMP\onnxruntime.zip"
+          $TEMP_DIR = "$env:TEMP\onnxruntime"
+
+          Write-Host "Downloading ONNX Runtime v${ORT_VERSION} for Windows x64..."
+          $maxRetries = 3
+          $success = $false
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            try {
+              Write-Host "Download attempt $i of $maxRetries..."
+              $ProgressPreference = 'SilentlyContinue'
+              Invoke-WebRequest -Uri $ORT_URL -OutFile $TEMP_ZIP -TimeoutSec 120
+              $success = $true
+              break
+            } catch {
+              Write-Host "Attempt $i failed: $_"
+              if ($i -lt $maxRetries) { Start-Sleep -Seconds 5 }
+            }
+          }
+          if (-not $success) {
+            Write-Host "ERROR: Failed to download ONNX Runtime after $maxRetries attempts"
+            exit 1
+          }
+
+          Write-Host "Extracting..."
+          Expand-Archive -Path $TEMP_ZIP -DestinationPath $TEMP_DIR -Force
+
+          # Copy DLL to resources directory
+          $DLL_SOURCE = Get-ChildItem -Path $TEMP_DIR -Recurse -Filter "onnxruntime.dll" | Select-Object -First 1
+          if (-not $DLL_SOURCE) {
+            Write-Host "ERROR: onnxruntime.dll not found in extracted archive"
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "src-tauri/resources"
+          Copy-Item $DLL_SOURCE.FullName "src-tauri/resources/onnxruntime.dll"
+
+          $fileSize = (Get-Item "src-tauri/resources/onnxruntime.dll").Length
+          Write-Host "ONNX Runtime DLL: $($fileSize / 1MB) MB"
+
+          # SECURITY: Verify SHA256 checksum of extracted DLL
+          $EXPECTED_ORT_SHA256 = "REPLACE_WITH_KNOWN_GOOD_SHA256"
+          $ACTUAL_ORT_SHA256 = (Get-FileHash -Path "src-tauri/resources/onnxruntime.dll" -Algorithm SHA256).Hash.ToLower()
+
+          if ($EXPECTED_ORT_SHA256 -eq "REPLACE_WITH_KNOWN_GOOD_SHA256") {
+            Write-Host "Current onnxruntime.dll SHA256: $ACTUAL_ORT_SHA256"
+            if ($env:GITHUB_REF -like "refs/tags/v*") {
+              Write-Host "::error::onnxruntime.dll SHA256 checksum not configured! Failing release build."
+              exit 1
+            }
+            Write-Host "::warning::onnxruntime.dll SHA256 not configured. Add: $ACTUAL_ORT_SHA256"
+          } elseif ($ACTUAL_ORT_SHA256 -ne $EXPECTED_ORT_SHA256.ToLower()) {
+            Write-Host "ERROR: onnxruntime.dll checksum mismatch!"
+            Write-Host "Expected: $EXPECTED_ORT_SHA256"
+            Write-Host "Actual:   $ACTUAL_ORT_SHA256"
+            exit 1
+          } else {
+            Write-Host "onnxruntime.dll SHA256 verified: OK"
+          }
+
+          # Cleanup
+          Remove-Item -Recurse -Force $TEMP_DIR, $TEMP_ZIP -ErrorAction SilentlyContinue
+
+          Write-Host "ONNX Runtime v${ORT_VERSION} ready for bundling"
+
+      - name: Add ONNX Runtime to Tauri resources
+        shell: pwsh
+        run: |
+          # Patch tauri.conf.json to include onnxruntime.dll in resources (Windows only)
+          $config = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $resources = [System.Collections.ArrayList]@($config.bundle.resources)
+          if ($resources -notcontains "resources/onnxruntime.dll") {
+            $resources.Add("resources/onnxruntime.dll") | Out-Null
+            $config.bundle.resources = $resources.ToArray()
+            $config | ConvertTo-Json -Depth 10 | Set-Content "src-tauri/tauri.conf.json"
+            Write-Host "Added onnxruntime.dll to Tauri resources"
+          }
+          Write-Host "Tauri resources: $($config.bundle.resources -join ', ')"
+
+      # ========================================
       # Build whisper.cpp for Windows
       # ========================================
       - name: Cache whisper model
@@ -187,9 +281,11 @@ jobs:
           }
           Write-Host "Commit SHA verified: OK (v1.7.2)"
 
-          Write-Host "Building for x86_64..."
+          Write-Host "Building for x86_64 (static linking)..."
           cmake -B build -S . `
             -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DWHISPER_BUILD_TESTS=OFF `
             -DWHISPER_BUILD_EXAMPLES=ON
 
           # Build with parallelization
@@ -223,6 +319,21 @@ jobs:
 
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE/src-tauri/binaries"
           Copy-Item $BINARY "$env:GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-pc-windows-msvc.exe"
+
+          # Verify static linking (no whisper/ggml DLL dependencies)
+          Write-Host "Verifying static linking..."
+          $dumpbinPath = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "dumpbin.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dumpbinPath) {
+            $deps = & $dumpbinPath.FullName /dependents $BINARY 2>$null
+            if ($deps -match 'whisper|ggml') {
+              Write-Host "ERROR: Binary has whisper/ggml DLL dependencies (not statically linked)!"
+              & $dumpbinPath.FullName /dependents $BINARY
+              exit 1
+            }
+            Write-Host "Binary is statically linked (verified via dumpbin)"
+          } else {
+            Write-Host "::warning::dumpbin not found, skipping static linking verification"
+          }
 
           Write-Host "whisper.cpp built for Windows"
           Get-ChildItem "$env:GITHUB_WORKSPACE/src-tauri/binaries/"

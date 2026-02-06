@@ -23,6 +23,26 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{Emitter, Manager};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
+/// Set ORT_DYLIB_PATH for ONNX Runtime dynamic loading on Windows.
+/// Searches candidate paths and sets the env var to the first found DLL.
+#[cfg(target_os = "windows")]
+fn setup_ort_dylib_path(candidates: &[std::path::PathBuf]) {
+    for candidate in candidates {
+        if candidate.exists() {
+            // SAFETY: Called during single-threaded setup() before any
+            // worker threads access ORT_DYLIB_PATH. The ort crate reads
+            // this env var lazily on first ONNX session creation.
+            unsafe { std::env::set_var("ORT_DYLIB_PATH", candidate) };
+            tracing::info!(path = %candidate.display(), "ORT_DYLIB_PATH set for ONNX Runtime");
+            return;
+        }
+    }
+    tracing::warn!(
+        searched = ?candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
+        "onnxruntime.dll not found - VAD may fail on Windows"
+    );
+}
+
 // Menu item IDs as constants to prevent typos
 const MENU_OPEN_SETTINGS: &str = "open_settings";
 const MENU_HELP_WEBSITE: &str = "help_website";
@@ -88,6 +108,14 @@ pub fn run() {
 
             if dev_path.exists() {
                 native_audio_state.set_vad_model_path(dev_path.to_string_lossy().to_string());
+
+                // Windows dev: Set ORT_DYLIB_PATH for ONNX Runtime dynamic loading
+                #[cfg(target_os = "windows")]
+                setup_ort_dylib_path(&[
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("resources")
+                        .join("onnxruntime.dll"),
+                ]);
             } else {
                 // Try resource directory (production)
                 if let Ok(resource_dir) = app.path().resource_dir() {
@@ -98,6 +126,13 @@ pub fn run() {
                     if prod_path.exists() {
                         native_audio_state.set_vad_model_path(prod_path.to_string_lossy().to_string());
                     }
+
+                    // Windows: Set ORT_DYLIB_PATH for ONNX Runtime dynamic loading
+                    #[cfg(target_os = "windows")]
+                    setup_ort_dylib_path(&[
+                        resource_dir.join("resources").join("onnxruntime.dll"),
+                        resource_dir.join("onnxruntime.dll"),
+                    ]);
                 }
             }
 

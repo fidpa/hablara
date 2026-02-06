@@ -116,70 +116,70 @@ jobs:
         run: |
           set -e  # Exit on any error
 
-          echo "📦 Cloning whisper.cpp..."
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
+          echo "📦 Cloning whisper.cpp (pinned to v1.7.2)..."
+          git clone --depth 1 --branch v1.7.2 https://github.com/ggml-org/whisper.cpp.git /tmp/whisper-build
           cd /tmp/whisper-build
 
+          # SECURITY: Verify commit SHA to prevent supply chain attacks
+          EXPECTED_SHA="6266a9f9e56a5b925e9892acf650f3eb1245814d"  # v1.7.2
+          ACTUAL_SHA=$(git rev-parse HEAD)
+          if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+            echo "❌ whisper.cpp commit SHA mismatch!"
+            echo "Expected: $EXPECTED_SHA"
+            echo "Actual:   $ACTUAL_SHA"
+            exit 1
+          fi
+          echo "✅ Commit SHA verified: OK (v1.7.2)"
+
           # Build for aarch64 (Apple Silicon with Metal)
-          echo "🔨 Building for aarch64 (Metal)..."
+          # BUILD_SHARED_LIBS=OFF ensures static linking (no @rpath dylib dependencies)
+          echo "🔨 Building for aarch64 (Metal, static)..."
           cmake -B build-arm64 \
             -S . \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DGGML_METAL=ON \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON
 
-          if [ $? -ne 0 ]; then
-            echo "❌ CMake configuration failed for arm64"
-            exit 1
-          fi
-
           cmake --build build-arm64 --config Release -j$(sysctl -n hw.ncpu)
-
-          if [ $? -ne 0 ]; then
-            echo "❌ CMake build failed for arm64"
-            exit 1
-          fi
 
           # Build for x86_64 (Intel)
           # GGML_NATIVE=OFF is critical for cross-compiling on ARM64 runner
           # Without it, cmake uses -mcpu=native which results in "apple-m1" - invalid for x86_64
-          echo "🔨 Building for x86_64..."
+          echo "🔨 Building for x86_64 (static)..."
           cmake -B build-x64 \
             -S . \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON \
             -DGGML_NATIVE=OFF \
             -DGGML_METAL=OFF
 
-          if [ $? -ne 0 ]; then
-            echo "❌ CMake configuration failed for x86_64"
-            exit 1
-          fi
-
           cmake --build build-x64 --config Release -j$(sysctl -n hw.ncpu)
 
-          if [ $? -ne 0 ]; then
-            echo "❌ CMake build failed for x86_64"
-            exit 1
-          fi
+          # Find binaries (whisper.cpp v1.7.x uses 'main' for CLI)
+          echo "🔍 Searching for whisper binary..."
+          ARM_BIN=""
+          X64_BIN=""
+          for name in "build-arm64/bin/whisper-cli" "build-arm64/bin/main"; do
+            if [ -f "$name" ]; then ARM_BIN="$name"; break; fi
+          done
+          for name in "build-x64/bin/whisper-cli" "build-x64/bin/main"; do
+            if [ -f "$name" ]; then X64_BIN="$name"; break; fi
+          done
 
-          # Find the built binaries (use only whisper-cli, not main which is just deprecation warning)
-          echo "🔍 Searching for whisper-cli binaries..."
-          ARM_BIN="build-arm64/bin/whisper-cli"
-          X64_BIN="build-x64/bin/whisper-cli"
-
-          if [ ! -f "$ARM_BIN" ]; then
-            echo "❌ arm64 binary not found at $ARM_BIN"
-            echo "Available files in build-arm64/bin:"
+          if [ -z "$ARM_BIN" ]; then
+            echo "❌ arm64 binary not found"
             ls -la build-arm64/bin/ || true
             exit 1
           fi
 
-          if [ ! -f "$X64_BIN" ]; then
-            echo "❌ x86_64 binary not found at $X64_BIN"
-            echo "Available files in build-x64/bin:"
+          if [ -z "$X64_BIN" ]; then
+            echo "❌ x86_64 binary not found"
             ls -la build-x64/bin/ || true
             exit 1
           fi
@@ -188,6 +188,20 @@ jobs:
           echo "🔍 Verifying binary architectures..."
           lipo -info "$ARM_BIN"
           lipo -info "$X64_BIN"
+
+          # Verify static linking (no @rpath dependencies)
+          echo "🔍 Verifying static linking..."
+          if otool -L "$ARM_BIN" | grep -q '@rpath'; then
+            echo "❌ ERROR: arm64 binary has @rpath dependencies!"
+            otool -L "$ARM_BIN"
+            exit 1
+          fi
+          if otool -L "$X64_BIN" | grep -q '@rpath'; then
+            echo "❌ ERROR: x64 binary has @rpath dependencies!"
+            otool -L "$X64_BIN"
+            exit 1
+          fi
+          echo "✅ Both binaries are statically linked"
 
           # Install to Tauri binaries directory
           mkdir -p $GITHUB_WORKSPACE/src-tauri/binaries

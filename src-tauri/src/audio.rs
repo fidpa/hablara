@@ -32,7 +32,7 @@ impl AudioState {
         // Clear previous recording
         {
             let mut buffer = self.audio_buffer.lock().unwrap_or_else(|poisoned| {
-                eprintln!("[audio] WARN: audio_buffer Mutex poisoned, recovering...");
+                tracing::warn!("audio_buffer Mutex poisoned, recovering");
                 poisoned.into_inner()
             });
             buffer.clear();
@@ -51,7 +51,7 @@ impl AudioState {
         self.is_recording.store(false, Ordering::SeqCst);
 
         let buffer = self.audio_buffer.lock().unwrap_or_else(|poisoned| {
-            eprintln!("[audio] WARN: audio_buffer Mutex poisoned, recovering...");
+            tracing::warn!("audio_buffer Mutex poisoned, recovering");
             poisoned.into_inner()
         });
 
@@ -64,7 +64,7 @@ impl AudioState {
         }
 
         let mut buffer = self.audio_buffer.lock().unwrap_or_else(|poisoned| {
-            eprintln!("[audio] WARN: audio_buffer Mutex poisoned, recovering...");
+            tracing::warn!("audio_buffer Mutex poisoned, recovering");
             poisoned.into_inner()
         });
         buffer.extend_from_slice(samples);
@@ -276,28 +276,58 @@ impl NativeAudioState {
         }
     }
 
+    /// Try to create VAD pipeline, returning None on failure (graceful degradation).
+    /// On Windows with load-dynamic, ONNX Runtime DLL must be present.
+    fn create_vad_pipeline(&self) -> Option<VadPipeline> {
+        let vad_path_guard = match self.vad_model_path.lock() {
+            Ok(guard) => guard,
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to lock VAD model path - recording without VAD");
+                return None;
+            }
+        };
+
+        let vad_path = match vad_path_guard.as_ref() {
+            Some(path) => path,
+            None => {
+                tracing::warn!("VAD model path not set - recording without VAD filtering");
+                return None;
+            }
+        };
+
+        match VadPipeline::new(vad_path) {
+            Ok(vad) => {
+                tracing::debug!("VAD pipeline initialized successfully");
+                Some(vad)
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "VAD initialization failed - recording without VAD filtering");
+                None
+            }
+        }
+    }
+
     /// Set the VAD model path (called once during app setup)
     pub fn set_vad_model_path(&self, path: String) {
         let mut guard = self.vad_model_path.lock().unwrap_or_else(|poisoned| {
-            eprintln!("[audio] WARN: vad_model_path Mutex poisoned, recovering...");
+            tracing::warn!("vad_model_path Mutex poisoned, recovering");
             poisoned.into_inner()
         });
         *guard = Some(path);
     }
 
     /// Open the audio device and initialize the recorder
+    ///
+    /// If VAD initialization fails (e.g. ONNX Runtime not found on Windows),
+    /// recording continues without VAD filtering (graceful degradation).
     pub fn open(&self) -> Result<(), String> {
         let mut guard = self.recorder.lock().map_err(|e| e.to_string())?;
         if guard.is_some() {
             return Ok(()); // Already open
         }
 
-        // Get VAD model path
-        let vad_path = self.vad_model_path.lock().map_err(|e| e.to_string())?;
-        let vad_path = vad_path.as_ref().ok_or("VAD model path not set")?;
-
-        // Create VAD pipeline
-        let vad = VadPipeline::new(vad_path).map_err(|e| format!("Failed to create VAD: {}", e))?;
+        // Try to create VAD pipeline (may fail on Windows if ONNX Runtime DLL is missing)
+        let vad = self.create_vad_pipeline();
 
         // Reset shutdown flag for new recorder
         self.shutdown_flag.store(false, Ordering::SeqCst);
@@ -316,10 +346,12 @@ impl NativeAudioState {
             level_atomic.store(level.to_bits(), Ordering::SeqCst);
         };
 
-        // Create recorder with VAD and level callback
-        let mut recorder = NativeAudioRecorder::new()
-            .with_vad(vad)
-            .with_level_callback(level_callback);
+        // Create recorder with optional VAD and level callback
+        let mut recorder = NativeAudioRecorder::new();
+        if let Some(vad) = vad {
+            recorder = recorder.with_vad(vad);
+        }
+        recorder = recorder.with_level_callback(level_callback);
 
         // Open the default audio device
         recorder.open(None)?;

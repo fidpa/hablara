@@ -198,16 +198,17 @@ jobs:
           fi
           echo "Commit SHA verified: OK (v1.7.2)"
 
-          echo "Building for x86_64..."
+          echo "Building for x86_64 (static linking)..."
           cmake -B build -S . \
             -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWHISPER_BUILD_TESTS=OFF \
             -DWHISPER_BUILD_EXAMPLES=ON
 
           cmake --build build --config Release -j$(nproc)
 
           # Find binary (name varies between whisper.cpp versions)
           echo "Searching for whisper binary..."
-          find build -type f -executable -name "main" -o -name "whisper-cli" -o -name "whisper" 2>/dev/null || true
 
           # Try different binary names (whisper.cpp v1.7.x uses 'main' for CLI)
           BINARY=""
@@ -225,6 +226,15 @@ jobs:
             find build -type f -executable | head -20
             exit 1
           fi
+
+          # Verify static linking (no libwhisper.so or libggml.so dependencies)
+          echo "Verifying static linking..."
+          if ldd "$BINARY" 2>/dev/null | grep -qE 'libwhisper|libggml'; then
+            echo "ERROR: Binary has shared library dependencies (not statically linked)!"
+            ldd "$BINARY"
+            exit 1
+          fi
+          echo "✅ Binary is statically linked"
 
           mkdir -p "$GITHUB_WORKSPACE/src-tauri/binaries"
           cp "$BINARY" "$GITHUB_WORKSPACE/src-tauri/binaries/whisper-x86_64-unknown-linux-gnu"

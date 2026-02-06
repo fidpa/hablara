@@ -3,6 +3,15 @@ import { vi } from "vitest";
 import { SetupHintsModal } from "@/components/SetupHintsModal";
 import { STORAGE_KEYS } from "@/lib/types";
 
+// Mock isWindows to control platform-specific behavior in tests
+vi.mock("@/lib/utils", async () => {
+  const actual = await vi.importActual("@/lib/utils");
+  return {
+    ...actual,
+    isWindows: vi.fn(() => false),
+  };
+});
+
 // Mock localStorage
 const localStorageMock = {
   getItem: vi.fn(() => null),
@@ -18,9 +27,12 @@ Object.defineProperty(global, "localStorage", {
 });
 
 describe("SetupHintsModal", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     // Clear all mocks before each test
     vi.clearAllMocks();
+    // Reset isWindows mock to default (macOS/Linux)
+    const { isWindows } = await import("@/lib/utils");
+    vi.mocked(isWindows).mockReturnValue(false);
   });
 
   it("should not render when isOpen is false", () => {
@@ -34,7 +46,7 @@ describe("SetupHintsModal", () => {
     expect(screen.getByText("Willkommen bei Hablará!")).toBeInTheDocument();
   });
 
-  it("should show setup steps", () => {
+  it("should show setup steps for Direct Distribution", () => {
     render(<SetupHintsModal isOpen={true} onClose={() => {}} />);
     expect(screen.getByText(/Ollama installieren/i)).toBeInTheDocument();
     expect(screen.getByText(/KI-Modell herunterladen/i)).toBeInTheDocument();
@@ -42,9 +54,23 @@ describe("SetupHintsModal", () => {
     expect(screen.getByText(/Installation verifizieren/i)).toBeInTheDocument();
   });
 
-  it("should show curl command", () => {
+  it("should show curl setup command on macOS/Linux", () => {
     render(<SetupHintsModal isOpen={true} onClose={() => {}} />);
-    expect(screen.getByText(/curl -fsSL/i)).toBeInTheDocument();
+    const codeElement = document.querySelector("code");
+    expect(codeElement).toBeTruthy();
+    expect(codeElement?.textContent).toContain("curl -fsSL");
+    expect(codeElement?.textContent).toContain("setup-ollama-quick.sh");
+  });
+
+  it("should show PowerShell setup command on Windows", async () => {
+    const { isWindows } = await import("@/lib/utils");
+    vi.mocked(isWindows).mockReturnValue(true);
+
+    render(<SetupHintsModal isOpen={true} onClose={() => {}} />);
+    const codeElement = document.querySelector("code");
+    expect(codeElement).toBeTruthy();
+    expect(codeElement?.textContent).toContain("Invoke-WebRequest");
+    expect(codeElement?.textContent).toContain("setup-ollama-quick.ps1");
   });
 
   it("should call onClose with true when 'Tour starten' is clicked", async () => {
@@ -88,7 +114,7 @@ describe("SetupHintsModal", () => {
     });
   });
 
-  it("should copy command to clipboard when copy button is clicked", async () => {
+  it("should copy setup command to clipboard when copy button is clicked", async () => {
     // Mock clipboard API
     const writeTextMock = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -104,10 +130,10 @@ describe("SetupHintsModal", () => {
     const copyButton = screen.getByLabelText("Befehl kopieren");
     fireEvent.click(copyButton);
 
-    // Verify clipboard API was called with correct command
+    // Verify clipboard API was called with setup script command (macOS/Linux via mock)
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(
-        "ollama pull qwen2.5:7b"
+        "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash"
       );
     });
 
