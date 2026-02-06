@@ -57,6 +57,21 @@ log_error() { echo -e "${COLOR_RED}✗ Error: ${1}${COLOR_RESET}" >&2; }
 
 command_exists() { command -v "$1" &> /dev/null; }
 
+# Check if an Ollama model is installed (pipefail-safe, no regex escaping needed)
+ollama_model_exists() {
+  local model="$1"
+  local found=false
+  while IFS= read -r line; do
+    # Extract first whitespace-delimited field (model name)
+    local name="${line%%[[:space:]]*}"
+    if [[ "$name" == "$model" ]]; then
+      found=true
+      break
+    fi
+  done < <(ollama list 2>/dev/null)
+  $found
+}
+
 json_escape_string() {
   local str="$1"
   # Order matters: backslashes first
@@ -86,7 +101,7 @@ version_gte() {
   if command_exists gsort; then
     # macOS with Homebrew coreutils
     [[ "$(printf '%s\n%s' "$v2" "$v1" | gsort -V | head -n1)" == "$v2" ]]
-  elif sort --version 2>/dev/null | grep -q "GNU"; then
+  elif sort --version 2>/dev/null | grep "GNU" > /dev/null; then
     [[ "$(printf '%s\n%s' "$v2" "$v1" | sort -V | head -n1)" == "$v2" ]]
   else
     local -a v1_parts v2_parts
@@ -147,7 +162,7 @@ test_model_inference() {
     -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Say OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
     2>/dev/null) || true
 
-  if [[ -n "$response" ]] && echo "$response" | grep -q '"response"'; then
+  if [[ -n "$response" ]] && echo "$response" | grep '"response"' > /dev/null; then
     log_success "Model-Inference-Test erfolgreich"
     return 0
   fi
@@ -444,11 +459,7 @@ pull_base_model() {
   log_step "Downloading base model..."
   log_info "Prüfe Modell: ${MODEL_NAME}"
 
-  # Escape regex special chars for grep
-  local escaped_model_name
-  escaped_model_name=$(printf '%s' "$MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
-
-  if ollama list 2>/dev/null | grep -qE "^${escaped_model_name}[[:space:]]"; then
+  if ollama_model_exists "${MODEL_NAME}"; then
     log_success "Modell bereits vorhanden: ${MODEL_NAME}"
     return 0
   fi
@@ -466,10 +477,7 @@ create_custom_model() {
   log_step "Creating custom model..."
   log_info "Prüfe Custom-Modell: ${CUSTOM_MODEL_NAME}"
 
-  local escaped_custom_model_name
-  escaped_custom_model_name=$(printf '%s' "$CUSTOM_MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
-
-  if ollama list 2>/dev/null | grep -qE "^${escaped_custom_model_name}[[:space:]]"; then
+  if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
     log_success "Custom-Modell bereits vorhanden"
     return 0
   fi
@@ -518,17 +526,13 @@ verify_installation() {
     return 1
   }
 
-  local escaped_model_name escaped_custom_model_name
-  escaped_model_name=$(printf '%s' "$MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
-  escaped_custom_model_name=$(printf '%s' "$CUSTOM_MODEL_NAME" | sed 's/[][\.*^$()+?{|\\]/\\&/g')
-
-  ollama list 2>/dev/null | grep -qE "^${escaped_model_name}[[:space:]]" || {
+  ollama_model_exists "${MODEL_NAME}" || {
     log_error "Basis-Modell nicht gefunden: ${MODEL_NAME}"; return 1
   }
   log_success "Basis-Modell verfügbar: ${MODEL_NAME}"
 
   local test_model="$MODEL_NAME"
-  if ollama list 2>/dev/null | grep -qE "^${escaped_custom_model_name}[[:space:]]"; then
+  if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
     log_success "Custom-Modell verfügbar: ${CUSTOM_MODEL_NAME}"
     test_model="$CUSTOM_MODEL_NAME"
   else
