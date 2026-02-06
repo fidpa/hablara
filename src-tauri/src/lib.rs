@@ -69,7 +69,6 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_keyring::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(
@@ -311,6 +310,11 @@ pub fn run() {
             commands::validate_window_state,
             // System commands
             commands::get_session_type,
+            // Keyring commands (OS-native credential storage)
+            commands::keyring_get_password,
+            commands::keyring_set_password,
+            commands::keyring_delete_password,
+            commands::keyring_diagnose,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

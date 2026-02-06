@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "identifier": "windows-default",
+  "identifier": "linux-default",
   "windows": ["main"],
-  "platforms": ["windows"],
+  "platforms": ["linux"],
   "permissions": [
     "core:default",
     "core:window:allow-create",
@@ -31,7 +31,7 @@
     "clipboard-manager:allow-write-text",
     "dialog:allow-open",
     "dialog:allow-save",
-    "fs:allow-read-text-file",
+"fs:allow-read-text-file",
     "fs:allow-write-text-file",
     "fs:allow-document-read",
     "fs:allow-document-write",

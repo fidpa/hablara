@@ -39,7 +39,7 @@ import type { TranscriptSegment, EmotionState, AnalysisResult, AppSettings, Tone
 import { DEFAULT_SETTINGS, PROCESSING_UI_TIMINGS, ONBOARDING_TIMINGS, PERMISSION_TIMINGS, STORAGE_KEYS } from "@/lib/types";
 import { Settings, Mic, MicOff, AlertCircle, Folder, FileText, Headphones } from "lucide-react";
 import { logger } from "@/lib/logger";
-import { cn, formatTimestamp } from "@/lib/utils";
+import { cn, formatTimestamp, isMacOS } from "@/lib/utils";
 import { storeApiKey, getApiKey } from "@/lib/secure-storage";
 import { getLLMClient, type LLMError } from "@/lib/llm";
 import { executeRAGQuery } from "@/lib/rag";
@@ -314,12 +314,27 @@ export default function Home(): JSX.Element {
       const setupHintsSeen = localStorage.getItem(STORAGE_KEYS.SETUP_HINTS_SEEN);
       const tourCompleted = localStorage.getItem(STORAGE_KEYS.TOUR_COMPLETED);
 
-      // Stage 0: Permission onboarding (before everything)
+      // Stage 0: Permission onboarding (macOS only - uses native permission APIs)
       if (permissionsGranted !== "true") {
-        const timer = setTimeout(() => {
-          setShowPermissions(true);
-        }, PERMISSION_TIMINGS.checkDelayMs);
-        return () => clearTimeout(timer);
+        if (isMacOS()) {
+          const timer = setTimeout(() => {
+            setShowPermissions(true);
+          }, PERMISSION_TIMINGS.checkDelayMs);
+          return () => clearTimeout(timer);
+        }
+        // Non-macOS: Skip permission onboarding, continue onboarding flow
+        localStorage.setItem(STORAGE_KEYS.PERMISSIONS_GRANTED, "true");
+        if (setupHintsSeen !== "true") {
+          const timer = setTimeout(() => {
+            setShowSetupHints(true);
+          }, ONBOARDING_TIMINGS.setupHintsDelayMs);
+          return () => clearTimeout(timer);
+        } else if (tourCompleted !== "true") {
+          const timer = setTimeout(() => {
+            setShowTour(true);
+          }, ONBOARDING_TIMINGS.tourStartDelayMs);
+          return () => clearTimeout(timer);
+        }
       }
       // Stage 1: Setup hints
       else if (setupHintsSeen !== "true") {

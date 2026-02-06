@@ -334,6 +334,13 @@ jobs:
           fi
           echo "✅ Frontend verified in bundle"
 
+      - name: Set display name with accent
+        run: |
+          APP_PATH="src-tauri/target/universal-apple-darwin/release/bundle/macos/Hablara.app"
+          plutil -replace CFBundleDisplayName -string "Hablará" "$APP_PATH/Contents/Info.plist"
+          plutil -replace CFBundleName -string "Hablará" "$APP_PATH/Contents/Info.plist"
+          echo "✅ CFBundleDisplayName and CFBundleName set to 'Hablará'"
+
       - name: Sign app bundle
         env:
           APPLE_SIGNING_IDENTITY: "Developer ID Application: Marc Allgeier (94H68V6M99)"
@@ -593,11 +600,47 @@ jobs:
     needs: publish
     runs-on: macos-14
     steps:
-      - name: Bump Homebrew Cask
-        # SHA-pinned for supply chain security (v3.8.6)
-        uses: eugenesvk/action-homebrew-bump-cask@6b066272df85c164f0496877387ecc8d989a194f
-        with:
-          token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          cask: hablara
-          tap: fidpa/homebrew-hablara
-          no_fork: true  # Push directly to our own tap
+      - name: Update Cask in Tap
+        env:
+          GH_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ github.ref_name }}"
+          VERSION_NUM="${VERSION#v}"  # Strip 'v' prefix
+
+          echo "📦 Updating Homebrew Cask to ${VERSION_NUM}..."
+
+          # Download DMG and compute SHA256
+          DMG_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}/Hablara_${VERSION_NUM}_universal.dmg"
+          echo "Downloading ${DMG_URL}..."
+          curl -fSL -o /tmp/hablara.dmg "${DMG_URL}"
+          SHA256=$(shasum -a 256 /tmp/hablara.dmg | cut -d' ' -f1)
+          echo "SHA256: ${SHA256}"
+          rm /tmp/hablara.dmg
+
+          # Fetch current cask file from tap (single API call)
+          JSON_RESP=$(gh api repos/fidpa/homebrew-hablara/contents/Casks/hablara.rb)
+          FILE_SHA=$(echo "${JSON_RESP}" | jq -r .sha)
+          CURRENT_CONTENT=$(echo "${JSON_RESP}" | jq -r .content | base64 -d)
+
+          # Update version and sha256 (anchored to line start to avoid caveats matches)
+          UPDATED_CONTENT=$(echo "${CURRENT_CONTENT}" | \
+            sed -E "s/(^[[:space:]]*version )['\"][^'\"]*['\"]/\1\"${VERSION_NUM}\"/" | \
+            sed -E "s/(^[[:space:]]*sha256 )['\"][^'\"]*['\"]/\1\"${SHA256}\"/")
+
+          # Verify content actually changed (catch silent sed failures)
+          if [[ "${CURRENT_CONTENT}" == "${UPDATED_CONTENT}" ]]; then
+            echo "⚠️ Content unchanged - version may already be ${VERSION_NUM} or sed regex failed"
+            exit 1
+          fi
+
+          # Push updated cask file via GitHub API
+          ENCODED_CONTENT=$(echo -n "${UPDATED_CONTENT}" | base64 | tr -d '\n')
+          gh api repos/fidpa/homebrew-hablara/contents/Casks/hablara.rb \
+            --method PUT \
+            --field message="Bump hablara to ${VERSION_NUM}" \
+            --field content="${ENCODED_CONTENT}" \
+            --field sha="${FILE_SHA}" \
+            --silent
+
+          echo "✅ Homebrew Cask updated to ${VERSION_NUM} (sha256: ${SHA256})"

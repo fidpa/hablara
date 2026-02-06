@@ -2,14 +2,15 @@
  * Secure Storage for API Keys
  *
  * OWASP CWE-522 (Insufficiently Protected Credentials):
- * Uses OS-native encrypted credential storage.
+ * Uses OS-native encrypted credential storage via custom Tauri commands
+ * backed by keyring-rs v3.6.3 with proper spawn_blocking.
  *
  * Platform-specific encryption:
  * - macOS: Keychain (AES-256-GCM, hardware-backed if Secure Enclave available)
  * - Windows: Credential Manager (DPAPI - Data Protection API)
  * - Linux: Secret Service API (D-Bus, typically GNOME Keyring or KWallet)
  *
- * ⚠️ SECURITY WARNING - Browser Fallback:
+ * SECURITY WARNING - Browser Fallback:
  * sessionStorage is DEV-ONLY and UNSAFE for production!
  * - Vulnerable to XSS (any script on same origin can read)
  * - No encryption in RAM
@@ -17,15 +18,15 @@
  *
  * For production: Always use Tauri + OS Keychain.
  *
- * ⚠️ LINUX NOTE (Phase 55 + Audit 2026-02-05):
- * tauri-plugin-keyring uses sync-secret-service (D-Bus).
- * Requires GNOME Keyring, KWallet, or compatible Secret Service provider.
- * Does NOT work on minimal WMs without keyring daemon.
+ * LINUX NOTE (Phase 55 + Phase 56 Fix):
+ * Custom Tauri commands replace tauri-plugin-keyring for:
+ * 1. spawn_blocking on all D-Bus calls (prevents thread starvation)
+ * 2. Explicit keyring::Error::NoEntry matching (no error swallowing)
+ * 3. Structured diagnostics via keyring_diagnose command
  *
- * Collection Behavior (Phase 55.1):
+ * Collection Behavior:
  * - Uses default Secret Service collection (typically "login")
  * - "login" collection persists across reboots (recommended)
- * - "session" collection is volatile (cleared on logout)
  * - keyring-rs v3.6.3 defaults to "login" collection for persistence
  *
  * KDE Plasma 6 (2024+):
@@ -55,6 +56,15 @@ export type SecretServiceStatus =
   | "timeout"      // Secret Service didn't respond in time
   | "not-linux"    // Not running on Linux (macOS/Windows always work)
   | "not-tauri";   // Running in browser (dev mode)
+
+/**
+ * Diagnostics result from keyring_diagnose command
+ */
+interface KeyringDiagnostics {
+  available: boolean;
+  os: string;
+  error: string | null;
+}
 
 // ============================================================================
 // Constants (Dynamic Values Pattern)
@@ -199,6 +209,15 @@ function isLinuxPlatform(): boolean {
   return platform.includes("linux");
 }
 
+/**
+ * Lazy-loaded invoke function from Tauri API.
+ * Avoids importing @tauri-apps/api/core at module level (breaks in browser).
+ */
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<T>(cmd, args);
+}
+
 // ============================================================================
 // Secret Service Detection (Linux)
 // ============================================================================
@@ -209,7 +228,7 @@ function isLinuxPlatform(): boolean {
  * On macOS/Windows, always returns "not-linux" (native keystores always work).
  * In browser, returns "not-tauri".
  *
- * Uses a test read operation with timeout to verify connectivity.
+ * Uses the keyring_diagnose Tauri command for structured diagnostics.
  */
 export async function checkSecretServiceStatus(): Promise<SecretServiceStatus> {
   if (!isTauriRuntime()) {
@@ -221,19 +240,40 @@ export async function checkSecretServiceStatus(): Promise<SecretServiceStatus> {
   }
 
   try {
-    const { getPassword } = await import("tauri-plugin-keyring-api");
-
-    // Try to read a non-existent key as a connectivity test
-    // This will return null if Secret Service works (key not found),
-    // or timeout/error if Secret Service is unavailable
-    await withTimeout(
-      getPassword(KEYRING_SERVICE, "__secret_service_ping__"),
+    const diagnostics = await withTimeout(
+      tauriInvoke<KeyringDiagnostics>("keyring_diagnose", {
+        service: KEYRING_SERVICE,
+      }),
       KEYRING_PING_TIMEOUT_MS,
       "Secret Service ping"
     );
 
-    // If we get here without error, Secret Service is working
-    return "available";
+    if (diagnostics.available) {
+      return "available";
+    }
+
+    // Backend reported unavailable - check error details
+    const errorMsg = diagnostics.error ?? "";
+    const lowerError = errorMsg.toLowerCase();
+
+    // D-Bus connection errors indicate service is not running
+    const dbusErrorPatterns = [
+      "failed to open session",
+      "org.freedesktop.dbus.error",
+      "connection refused",
+      "no such interface",
+      "service unknown",
+      "not provided",
+    ];
+    if (dbusErrorPatterns.some((p) => lowerError.includes(p))) {
+      logger.warn("SecureStorage", "Secret Service unavailable (D-Bus error)", {
+        error: errorMsg,
+      });
+      return "unavailable";
+    }
+
+    logger.warn("SecureStorage", "Secret Service unavailable", { error: errorMsg });
+    return "unavailable";
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
 
@@ -242,21 +282,7 @@ export async function checkSecretServiceStatus(): Promise<SecretServiceStatus> {
       return "timeout";
     }
 
-    // Common "not found" responses indicate Secret Service IS working
-    // (the key doesn't exist, but the service responded)
-    const notFoundPatterns = [
-      "No matching",
-      "not found",
-      "NoEntry",
-      "ItemNotFound",
-      "no result",
-    ];
-    if (notFoundPatterns.some((p) => msg.toLowerCase().includes(p.toLowerCase()))) {
-      return "available";
-    }
-
-    // Any other error = Secret Service likely unavailable
-    logger.warn("SecureStorage", "Secret Service unavailable", { error: msg });
+    logger.warn("SecureStorage", "Secret Service check failed", { error: msg });
     return "unavailable";
   }
 }
@@ -296,25 +322,28 @@ export async function storeApiKey(
 ): Promise<void> {
   if (isTauriRuntime()) {
     try {
-      const { setPassword } = await import("tauri-plugin-keyring-api");
       const account = `${provider}-api-key`;
 
-      // setPassword is idempotent - overwrites existing key if present
-      // Wrapped with timeout to prevent D-Bus hangs on Linux
-      //
-      // Linux Collection Note (Audit 2026-02-05):
-      // keyring-rs v3.6.3 defaults to "login" collection (persistent across reboots).
-      // We have no direct control over collection via plugin API, but library default is correct.
-      await withTimeout(
-        setPassword(KEYRING_SERVICE, account, apiKey),
-        KEYRING_TIMEOUT_MS,
+      // Tauri command uses spawn_blocking internally for D-Bus safety
+      // keyring-rs defaults to "login" collection (persistent across reboots)
+      // P2-2: Wrapped with retry to handle transient D-Bus issues (symmetric with getApiKey)
+      await withRetryOnTimeout(
+        () =>
+          withTimeout(
+            tauriInvoke("keyring_set_password", {
+              service: KEYRING_SERVICE,
+              user: account,
+              password: apiKey,
+            }),
+            KEYRING_TIMEOUT_MS,
+            `Store ${provider} API key`
+          ),
         `Store ${provider} API key`
       );
       logger.info("SecureStorage", `API key stored for ${provider} (OS Keychain)`, {
         service: KEYRING_SERVICE,
         account,
         platform: isLinuxPlatform() ? "linux" : "other",
-        note: isLinuxPlatform() ? "Using default 'login' collection (persistent)" : undefined,
       });
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -331,7 +360,7 @@ export async function storeApiKey(
       throw new Error("Keychain access failed");
     }
   } else {
-    // ⚠️ DEV-ONLY: Browser fallback (XSS-vulnerable, unencrypted!)
+    // DEV-ONLY: Browser fallback (XSS-vulnerable, unencrypted!)
     // Production MUST use Tauri + OS Keychain
     sessionStorage.setItem(`vip-temp-${provider}-key`, apiKey);
     logger.warn(
@@ -359,14 +388,17 @@ export async function getApiKey(
 ): Promise<string | null> {
   if (isTauriRuntime()) {
     try {
-      const { getPassword } = await import("tauri-plugin-keyring-api");
       const account = `${provider}-api-key`;
 
       // P2-2: Wrapped with retry + timeout to handle transient D-Bus issues
+      // keyring_get_password returns null for NoEntry (not an error)
       const key = await withRetryOnTimeout(
         () =>
           withTimeout(
-            getPassword(KEYRING_SERVICE, account),
+            tauriInvoke<string | null>("keyring_get_password", {
+              service: KEYRING_SERVICE,
+              user: account,
+            }),
             KEYRING_TIMEOUT_MS,
             `Get ${provider} API key`
           ),
@@ -374,14 +406,12 @@ export async function getApiKey(
       );
 
       if (key) {
-        logger.info("SecureStorage", `API key retrieved for ${provider} from OS Keychain`, {
+        logger.debug("SecureStorage", `API key retrieved for ${provider} from OS Keychain`, {
           service: KEYRING_SERVICE,
           account,
-          platform: isLinuxPlatform() ? "linux" : "other",
         });
       } else {
-        // This is the ideal case for a non-existent key
-        logger.info("SecureStorage", `No API key found for ${provider} (null result)`, {
+        logger.debug("SecureStorage", `No API key found for ${provider} (null result)`, {
           service: KEYRING_SERVICE,
           account,
         });
@@ -405,16 +435,9 @@ export async function getApiKey(
         return null;
       }
 
-      // 3. The underlying library may throw an error when entry is not found.
-      // This is not ideal, but we must handle it gracefully.
-      const notFoundPatterns = ["no matching", "not found", "noentry", "itemnotfound"];
-      if (notFoundPatterns.some((p) => lowerMsg.includes(p))) {
-        logger.info("SecureStorage", `No API key found for ${provider} (entry not found error)`);
-        return null;
-      }
-
-      // 4. Any other error is unexpected and should be logged as a failure.
-      // This prevents masking real issues like a broken D-Bus connection.
+      // 3. Any other error is unexpected and should be logged as a failure.
+      // With our custom backend, NoEntry is returned as null (not an error),
+      // so any error here is a genuine backend failure.
       logger.error("SecureStorage", `Failed to get API key for ${provider} due to an unexpected error.`, {
         error: msg,
       });
@@ -422,7 +445,7 @@ export async function getApiKey(
     }
   }
 
-  // ⚠️ DEV-ONLY: Browser fallback (XSS-vulnerable, unencrypted!)
+  // DEV-ONLY: Browser fallback (XSS-vulnerable, unencrypted!)
   // Production MUST use Tauri + OS Keychain
   return sessionStorage.getItem(`vip-temp-${provider}-key`);
 }
@@ -435,13 +458,14 @@ export async function getApiKey(
 export async function deleteApiKey(provider: CredentialProvider): Promise<void> {
   if (isTauriRuntime()) {
     try {
-      const { deletePassword } = await import("tauri-plugin-keyring-api");
       const account = `${provider}-api-key`;
 
-      // Wrapped with timeout to prevent D-Bus hangs on Linux
-      // Note: deletePassword returns void, throws on error
+      // keyring_delete_password is idempotent (NoEntry = Ok)
       await withTimeout(
-        deletePassword(KEYRING_SERVICE, account),
+        tauriInvoke("keyring_delete_password", {
+          service: KEYRING_SERVICE,
+          user: account,
+        }),
         KEYRING_TIMEOUT_MS,
         `Delete ${provider} API key`
       );
@@ -453,12 +477,6 @@ export async function deleteApiKey(provider: CredentialProvider): Promise<void> 
       // Deletion is best-effort, so we don't throw, but we log accurately.
       if (lowerMsg.includes("timed out")) {
         logger.error("SecureStorage", `Keychain timeout while deleting ${provider} key.`);
-        return;
-      }
-
-      const notFoundPatterns = ["no matching", "not found", "noentry", "itemnotfound"];
-      if (notFoundPatterns.some((p) => lowerMsg.includes(p))) {
-        logger.info("SecureStorage", `No API key found for ${provider} to delete (entry not found error).`);
         return;
       }
 

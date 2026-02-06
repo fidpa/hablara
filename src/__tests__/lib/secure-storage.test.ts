@@ -1,5 +1,5 @@
 /**
- * Tests for secure-storage.ts (Phase 55: Linux Secret Service Robustness)
+ * Tests for secure-storage.ts (Phase 56: Direct keyring crate integration)
  *
  * Tests cover:
  * - Secret Service status detection (checkSecretServiceStatus)
@@ -10,7 +10,7 @@
  * - Callback parameters (onKeychainLocked, onTimeout)
  * - Edge cases (undefined navigator, browser environment)
  *
- * Note: Tauri keyring operations require mocking tauri-plugin-keyring-api.
+ * Note: Tauri keyring operations mock @tauri-apps/api/core invoke.
  * Browser fallback tests verify sessionStorage behavior.
  */
 
@@ -306,11 +306,9 @@ describe("Tauri keyring integration (mocked)", () => {
 
   describe("onTimeout callback", () => {
     it("should call onTimeout when keyring operation times out", async () => {
-      // Mock the keyring API to simulate timeout
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockRejectedValue(new Error("Operation timed out after 5000ms")),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
+      // Mock the Tauri invoke to simulate timeout
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockRejectedValue(new Error("Operation timed out after 5000ms")),
       }));
 
       // Re-import to get mocked version
@@ -329,11 +327,9 @@ describe("Tauri keyring integration (mocked)", () => {
 
   describe("onKeychainLocked callback", () => {
     it("should call onKeychainLocked when keychain is locked", async () => {
-      // Mock the keyring API to simulate locked keychain
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockRejectedValue(new Error("Keychain is locked")),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
+      // Mock the Tauri invoke to simulate locked keychain
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockRejectedValue(new Error("Keychain is locked")),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
@@ -349,10 +345,8 @@ describe("Tauri keyring integration (mocked)", () => {
     });
 
     it("should call onKeychainLocked when access is denied", async () => {
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockRejectedValue(new Error("Access denied to keychain")),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockRejectedValue(new Error("Access denied to keychain")),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
@@ -367,10 +361,8 @@ describe("Tauri keyring integration (mocked)", () => {
 
   describe("successful keyring operations", () => {
     it("should return key from keyring when available", async () => {
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockResolvedValue("sk-test-key-from-keyring"),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockResolvedValue("sk-test-key-from-keyring"),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
@@ -381,10 +373,8 @@ describe("Tauri keyring integration (mocked)", () => {
     });
 
     it("should return null when key not found (null response)", async () => {
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockResolvedValue(null),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockResolvedValue(null),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
@@ -393,32 +383,16 @@ describe("Tauri keyring integration (mocked)", () => {
 
       expect(result).toBeNull();
     });
-
-    it("should return null when key not found (NoEntry error)", async () => {
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockRejectedValue(new Error("NoEntry: Item not found")),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
-      }));
-
-      const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
-
-      const result = await getApiKeyMocked("openai");
-
-      expect(result).toBeNull();
-    });
   });
 
   describe("P2-2: retry on timeout", () => {
     it("should retry once on timeout before giving up", async () => {
       let callCount = 0;
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockImplementation(() => {
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockImplementation(() => {
           callCount++;
           return Promise.reject(new Error("Operation timed out"));
         }),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");
@@ -434,16 +408,14 @@ describe("Tauri keyring integration (mocked)", () => {
 
     it("should succeed on retry if second attempt works", async () => {
       let callCount = 0;
-      vi.doMock("tauri-plugin-keyring-api", () => ({
-        getPassword: vi.fn().mockImplementation(() => {
+      vi.doMock("@tauri-apps/api/core", () => ({
+        invoke: vi.fn().mockImplementation(() => {
           callCount++;
           if (callCount === 1) {
             return Promise.reject(new Error("Operation timed out"));
           }
           return Promise.resolve("sk-recovered-key");
         }),
-        setPassword: vi.fn(),
-        deletePassword: vi.fn(),
       }));
 
       const { getApiKey: getApiKeyMocked } = await import("@/lib/secure-storage");

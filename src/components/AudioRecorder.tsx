@@ -247,7 +247,7 @@ export default function AudioRecorder({
           showAudioErrorToast(toast, "capture_failed", errorMessage);
         }
 
-        callbacksRef.current.onError("Mikrofon-Zugriff fehlgeschlagen. Bitte Berechtigungen pruefen.");
+        callbacksRef.current.onError("Mikrofon-Zugriff fehlgeschlagen. Bitte Berechtigungen prüfen.");
       });
     } else if (!isRecording && hasStartedRef.current) {
       hasStartedRef.current = false;

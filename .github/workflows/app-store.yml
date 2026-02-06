@@ -398,9 +398,10 @@ jobs:
           du -sh "$APP_PATH"
           lipo -info "$APP_PATH/Contents/MacOS/hablara"
 
-          # Set CFBundleDisplayName for accented display name in Finder/Dock
+          # Set display name with accent for Finder/Dock
           plutil -replace CFBundleDisplayName -string "Hablará" "$APP_PATH/Contents/Info.plist"
-          echo "✅ CFBundleDisplayName set to 'Hablará'"
+          plutil -replace CFBundleName -string "Hablará" "$APP_PATH/Contents/Info.plist"
+          echo "✅ CFBundleDisplayName and CFBundleName set to 'Hablará'"
 
           # Set CFBundleVersion to match --bundle-version in altool upload
           plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$APP_PATH/Contents/Info.plist"

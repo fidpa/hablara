@@ -25,7 +25,7 @@
     <key>com.apple.security.files.user-selected.read-write</key>
     <true/>
 
-    <!-- Keychain Access Groups (Required for tauri-plugin-keyring) -->
+    <!-- Keychain Access Groups (Required for keyring-rs credential storage) -->
     <key>keychain-access-groups</key>
     <array>
         <string>94H68V6M99.com.fidpa.hablara</string>

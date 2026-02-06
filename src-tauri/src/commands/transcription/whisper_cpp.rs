@@ -8,6 +8,36 @@ use tokio::process::Command;
 
 use crate::commands::utils::{find_whisper_paths, get_target_triple, parse_whisper_stdout};
 
+/// Platform-aware setup script hint for error messages
+fn setup_hint() -> &'static str {
+    if cfg!(target_os = "windows") {
+        ".\\scripts\\setup-whisper.ps1"
+    } else {
+        "./scripts/setup-whisper.sh"
+    }
+}
+
+const MAX_WHISPER_THREADS: usize = 8;
+const DEFAULT_WHISPER_THREADS: usize = 4;
+
+/// Detect available CPU threads for whisper.cpp, capped for optimal performance
+fn thread_count() -> String {
+    let threads = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(DEFAULT_WHISPER_THREADS)
+        .clamp(1, MAX_WHISPER_THREADS);
+    threads.to_string()
+}
+
+/// Construct whisper binary filename with platform-appropriate extension
+fn whisper_binary_name(target_triple: &str) -> String {
+    if cfg!(target_os = "windows") {
+        format!("whisper-{}.exe", target_triple)
+    } else {
+        format!("whisper-{}", target_triple)
+    }
+}
+
 /// Whisper status
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,11 +64,11 @@ pub(crate) async fn transcribe_whisper_cpp(
     let (binaries_dir, models_dir) = find_whisper_paths(app_handle)?;
     let target_triple = get_target_triple()?;
 
-    let sidecar_path = binaries_dir.join(format!("whisper-{}", target_triple));
+    let sidecar_path = binaries_dir.join(whisper_binary_name(target_triple));
 
     // Check if whisper binary exists
     if !sidecar_path.exists() {
-        return Ok("[Whisper not installed - run: ./scripts/setup-whisper.sh]".to_string());
+        return Ok(format!("[Whisper not installed - run: {}]", setup_hint()));
     }
 
     // Model path
@@ -46,8 +76,8 @@ pub(crate) async fn transcribe_whisper_cpp(
 
     if !model_path.exists() {
         return Err(format!(
-            "Model '{}' not found. Run: ./scripts/setup-whisper.sh {}",
-            model, model
+            "Model '{}' not found. Run: {} {}",
+            model, setup_hint(), model
         ));
     }
 
@@ -95,7 +125,7 @@ pub(crate) async fn transcribe_whisper_cpp(
             "2.4", // Entropy threshold (default, stricter = fewer hallucinations)
             "-nf", // No temperature fallback (reduces "[Musik]" labels)
             "-t",
-            "8", // Threads for M4 Pro
+            &thread_count()
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -177,7 +207,7 @@ pub(crate) async fn check_whisper_status_impl(
 
     // Check binary
     let target_triple = get_target_triple().unwrap_or("unknown");
-    let binary_path = binaries_dir.join(format!("whisper-{}", target_triple));
+    let binary_path = binaries_dir.join(whisper_binary_name(target_triple));
     let binary_exists = binary_path.exists();
 
     // Check models
@@ -207,9 +237,9 @@ pub(crate) async fn check_whisper_status_impl(
 
     let has_models = !models.is_empty();
     let error = if !binary_exists {
-        Some("Whisper binary not found. Run: ./scripts/setup-whisper.sh".to_string())
+        Some(format!("Whisper binary not found. Run: {}", setup_hint()))
     } else if !has_models {
-        Some("No models found. Run: ./scripts/setup-whisper.sh base".to_string())
+        Some(format!("No models found. Run: {} base", setup_hint()))
     } else {
         None
     };
