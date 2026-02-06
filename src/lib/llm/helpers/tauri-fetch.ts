@@ -62,6 +62,10 @@ export async function getTauriFetch(): Promise<typeof fetch | null> {
  * 1. Tauri HTTP plugin (bypasses CORS entirely - works on all platforms)
  * 2. Native fetch (fallback for browser/dev mode)
  *
+ * If the Tauri plugin rejects the URL (scope mismatch), the error is logged
+ * with the URL for debugging and re-thrown. This catches misconfigured
+ * capability URL patterns (e.g., missing port wildcard).
+ *
  * @param url - Request URL
  * @param init - Standard RequestInit options
  * @param callerName - Caller identifier for logging
@@ -76,7 +80,15 @@ export async function corsSafeFetch(
 
   if (tauriFetch) {
     logger.debug(callerName, "Using Tauri HTTP plugin for request");
-    return tauriFetch(url, init);
+    try {
+      return await tauriFetch(url, init);
+    } catch (error: unknown) {
+      // Log plugin errors with URL for easier debugging (skip abort - expected)
+      if (error instanceof Error && error.name !== "AbortError") {
+        logger.error(callerName, `Tauri HTTP plugin error for URL: ${url}`, error);
+      }
+      throw error;
+    }
   }
 
   // Browser/dev fallback
