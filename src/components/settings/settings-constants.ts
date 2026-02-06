@@ -60,6 +60,7 @@ export const LLM_PROVIDERS = [
 // Basis-Models (qwen2.5:7b/14b/32b) removed - use Custom Models for best performance
 export const LLM_MODELS = {
   ollama: [
+    "qwen2.5:3b-custom",   // Custom-optimized Qwen 2.5 3B (Lightweight/CPU-only)
     "qwen2.5:7b-custom",   // Custom-optimized Qwen 2.5 7B (see docs/how-to/LLM_SETUP.md)
     "qwen2.5:14b-custom",  // Custom-optimized Qwen 2.5 14B
     "qwen2.5:32b-custom",  // Custom-optimized Qwen 2.5 32B
@@ -78,6 +79,14 @@ export const LLM_MODELS = {
 
 // For backwards compatibility
 export const OLLAMA_MODELS = LLM_MODELS.ollama;
+
+/** Display labels for Ollama model dropdown (RAM, speed, use case) */
+export const OLLAMA_MODEL_LABELS: Record<string, string> = {
+  "qwen2.5:3b-custom": "Qwen 2.5 3B (~4 GB RAM) – Lightweight / CPU-only",
+  "qwen2.5:7b-custom": "Qwen 2.5 7B (~7 GB RAM) – Standard (empfohlen)",
+  "qwen2.5:14b-custom": "Qwen 2.5 14B (~9 GB RAM) – Höhere Präzision",
+  "qwen2.5:32b-custom": "Qwen 2.5 32B (~20 GB RAM) – Maximale Qualität",
+};
 
 /**
  * Default models per provider

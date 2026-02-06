@@ -2,7 +2,7 @@
 
 ## Übersicht
 
-Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Parametern für Emotion Analysis und Fallacy Detection.
+Vier optimierte Qwen 2.5 Modelle (3B/7B/14B/32B) mit Hablará-spezifischen Parametern für Emotion Analysis und Fallacy Detection.
 
 **Zweck:** Custom Ollama Models mit Hablará-spezifischen Optimierungen (8K Context, Temperature 0.3, System Prompt).
 
@@ -17,7 +17,8 @@ Drei optimierte Qwen 2.5 Modelle (7B/14B/32B) mit Hablará-spezifischen Paramete
 
 | Modell | JSON Reliability | Geschwindigkeit | RAM | Empfehlung |
 |--------|------------------|-----------------|-----|------------|
-| **7B** | 92% | ⚡⚡⚡ Schnellste | ~7 GB | **Default** - Beste Balance |
+| **3B** | ~90% | ⚡⚡⚡⚡ Schnellste | ~4 GB | Lightweight / CPU-only |
+| **7B** | 92% | ⚡⚡⚡ Schnell | ~7 GB | **Default** - Beste Balance |
 | **14B** | 93% | ⚡⚡ ~30% langsamer | ~9 GB | Höhere Präzision |
 | **32B** | 94% | ⚡ ~60% langsamer | ~20 GB | Maximale Qualität |
 
@@ -45,6 +46,9 @@ _Performance ist stark systemabhängig (CPU/GPU, RAM, Modell-Cache). GPU-Beschle
 
 **Manuell:**
 ```bash
+# Für 3B (Lightweight/CPU-only)
+ollama pull qwen2.5:3b
+
 # Für 7B (empfohlen)
 ollama pull qwen2.5:7b
 
@@ -61,6 +65,7 @@ ollama pull qwen2.5:32b
 ollama create qwen2.5:7b-custom -f scripts/ollama/qwen2.5-7b-custom.modelfile
 
 # Für andere Varianten
+ollama create qwen2.5:3b-custom -f scripts/ollama/qwen2.5-3b-custom.modelfile
 ollama create qwen2.5:14b-custom -f scripts/ollama/qwen2.5-14b-custom.modelfile
 ollama create qwen2.5:32b-custom -f scripts/ollama/qwen2.5-32b-custom.modelfile
 ```
@@ -107,6 +112,7 @@ Nach Setup wird das Custom Model automatisch von `OllamaClient` verwendet:
 
 | Use Case | Empfehlung | Begründung |
 |----------|------------|------------|
+| **Lightweight / CPU-only** | 3B | Schnellste, minimaler RAM (~4 GB) |
 | **Development** | 7B | Schnelle Iteration, geringer RAM |
 | **Production (Standard)** | 7B | Beste Speed/Quality Balance |
 | **Production (High Quality)** | 14B | +3% Accuracy, akzeptable Latenz |

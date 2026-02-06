@@ -33,7 +33,7 @@ import { ConsentModal } from "./ConsentModal";
 import { SecretServiceWarning } from "./SecretServiceWarning";
 import { OllamaTroubleshootingSection } from "./OllamaTroubleshootingSection";
 
-import { LLM_PROVIDERS, OLLAMA_MODELS, PROVIDER_DEFAULT_MODELS } from "./settings-constants";
+import { LLM_PROVIDERS, OLLAMA_MODELS, OLLAMA_MODEL_LABELS, PROVIDER_DEFAULT_MODELS } from "./settings-constants";
 
 interface LLMSettingsSectionProps {
   settings: AppSettings;
@@ -399,7 +399,7 @@ export function LLMSettingsSection({
               <SelectContent>
                 {OLLAMA_MODELS.map((model) => (
                   <SelectItem key={model} value={model}>
-                    {model}
+                    {OLLAMA_MODEL_LABELS[model] ?? model}
                   </SelectItem>
                 ))}
               </SelectContent>

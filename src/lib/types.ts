@@ -1238,7 +1238,7 @@ export type MicrophonePermissionStatus =
 
 // LLM Timeout Configuration (Provider-Specific)
 export const DEFAULT_LLM_TIMEOUTS: Record<LLMProvider, number> = {
-  ollama: 60000, // 60s for local inference (hardware-dependent, large models like llama3.1:70b)
+  ollama: 120000, // 120s for local inference (CPU-only with 7B+ models needs >60s, especially with queued parallel analyses)
   openai: 30000, // 30s for cloud API (predictable latency)
   anthropic: 30000, // 30s for cloud API (predictable latency)
 } as const;
@@ -1246,7 +1246,7 @@ export const DEFAULT_LLM_TIMEOUTS: Record<LLMProvider, number> = {
 // LLM Health Check & Special Timeouts
 export const LLM_HEALTH_CHECK_TIMEOUT = 5000; // 5s for cloud provider availability checks
 export const LLM_LOCAL_HEALTH_CHECK_TIMEOUT = 2000; // 2s for Ollama /api/tags check
-export const MLX_INVOKE_TIMEOUT = 30000; // 30s for MLX subprocess calls (half of Ollama 60s)
+export const MLX_INVOKE_TIMEOUT = 30000; // 30s for MLX subprocess calls (MLX is faster than Ollama CPU inference)
 
 // ============================================
 // End Processing Progress Types

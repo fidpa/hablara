@@ -19,7 +19,7 @@ describe("LLM Timeout Configuration", () => {
         timeoutMs: DEFAULT_LLM_TIMEOUTS.ollama,
       });
 
-      expect(client["timeoutMs"]).toBe(60000); // Private field access
+      expect(client["timeoutMs"]).toBe(120000); // Private field access
     });
 
     it("falls back to provider-specific default if no timeout provided", () => {
@@ -28,7 +28,7 @@ describe("LLM Timeout Configuration", () => {
         model: "qwen2.5:7b",
       });
 
-      expect(client["timeoutMs"]).toBe(DEFAULT_LLM_TIMEOUTS.ollama); // 60s for Ollama
+      expect(client["timeoutMs"]).toBe(DEFAULT_LLM_TIMEOUTS.ollama); // 120s for Ollama
     });
 
     it("accepts custom timeout override", () => {
@@ -85,8 +85,8 @@ describe("LLM Timeout Configuration", () => {
   });
 
   describe("DEFAULT_LLM_TIMEOUTS constant", () => {
-    it("defines 60s for Ollama (local inference)", () => {
-      expect(DEFAULT_LLM_TIMEOUTS.ollama).toBe(60000);
+    it("defines 120s for Ollama (local inference)", () => {
+      expect(DEFAULT_LLM_TIMEOUTS.ollama).toBe(120000);
     });
 
     it("defines 30s for OpenAI (cloud API)", () => {

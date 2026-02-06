@@ -102,6 +102,9 @@ core
 /src-tauri/resources/models/*.onnx
 /src-tauri/resources/models/*.bin
 
+# ONNX Runtime DLL (Windows, download separately - ~12MB)
+/src-tauri/resources/onnxruntime.dll
+
 # EXCEPTION: Silero VAD model MUST be tracked (required for build)
 !/src-tauri/resources/models/silero_vad_v4.onnx
 

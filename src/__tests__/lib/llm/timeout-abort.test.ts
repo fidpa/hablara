@@ -2,7 +2,7 @@
  * Tests for LLM Timeout & AbortSignal Support (Phase 40)
  *
  * Validates that all LLM clients properly handle:
- * - Provider-specific timeout for hanging requests (60s Ollama, 30s Cloud)
+ * - Provider-specific timeout for hanging requests (120s Ollama, 30s Cloud)
  * - User cancellation via AbortSignal
  * - Combined timeout + AbortSignal
  *

@@ -272,9 +272,9 @@ describe('LLM Client Factory - Timeout Injection (Phase 40)', () => {
     getLLMClient = llmModule.getLLMClient;
   });
 
-  it('should inject 60s timeout for Ollama', () => {
+  it('should inject 120s timeout for Ollama', () => {
     const client = getLLMClient({ provider: 'ollama', model: 'qwen2.5:7b' });
-    expect(client['timeoutMs']).toBe(60000);
+    expect(client['timeoutMs']).toBe(120000);
   });
 
   it('should inject 30s timeout for OpenAI', () => {
@@ -294,16 +294,16 @@ describe('LLM Client Factory - Timeout Injection (Phase 40)', () => {
   });
 
   it('should inject correct timeout after provider switch', () => {
-    // Start with Ollama (60s)
+    // Start with Ollama (120s)
     const ollama = getLLMClient({ provider: 'ollama', model: 'qwen2.5:7b' });
-    expect(ollama['timeoutMs']).toBe(60000);
+    expect(ollama['timeoutMs']).toBe(120000);
 
     // Switch to OpenAI (30s)
     const openai = getLLMClient({ provider: 'openai', model: 'gpt-4o-mini' });
     expect(openai['timeoutMs']).toBe(30000);
 
-    // Back to Ollama (60s again)
+    // Back to Ollama (120s again)
     const ollama2 = getLLMClient({ provider: 'ollama', model: 'qwen2.5:7b' });
-    expect(ollama2['timeoutMs']).toBe(60000);
+    expect(ollama2['timeoutMs']).toBe(120000);
   });
 });

@@ -116,6 +116,8 @@ pub fn validate_audio_file_path(path: &str) -> Result<PathBuf, SecurityError> {
     let home_dir = dirs::home_dir().ok_or_else(|| {
         SecurityError::InvalidStoragePath("Cannot determine home directory".to_string())
     })?;
+    // Canonicalize home_dir to match canonical path format (Windows adds \\?\ prefix)
+    let home_dir = home_dir.canonicalize().unwrap_or(home_dir);
     let tmp_dir = std::env::temp_dir();
 
     // Canonicalize tmp_dir to handle macOS /private/var/folders symlink
@@ -191,6 +193,8 @@ pub fn validate_storage_path(path: &str) -> Result<PathBuf, SecurityError> {
     let home_dir = dirs::home_dir().ok_or_else(|| {
         SecurityError::InvalidStoragePath("Cannot determine home directory".to_string())
     })?;
+    // Canonicalize home_dir to match canonical path format (Windows adds \\?\ prefix)
+    let home_dir = home_dir.canonicalize().unwrap_or(home_dir);
 
     if !canonical.starts_with(&home_dir) {
         return Err(SecurityError::NotInAllowedDir(format!(

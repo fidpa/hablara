@@ -55,6 +55,7 @@
       "binaries/whisper-*",
       "models/ggml-german-turbo.bin",
       "../public/models",
+      "../scripts/ollama/qwen2.5-3b-custom.modelfile",
       "../scripts/ollama/qwen2.5-7b-custom.modelfile"
     ],
     "category": "Productivity",
