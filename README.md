@@ -84,7 +84,7 @@ Updates: `brew upgrade --cask hablara`
 #### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
 ```
 
 <details>
@@ -137,7 +137,7 @@ AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImage
 #### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
 ```
 
 <details>
@@ -229,7 +229,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 **Setup-Skript ausführen:**
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\setup-ollama-quick.ps1"; & "$env:TEMP\setup-ollama-quick.ps1"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-win.ps1" -OutFile "$env:TEMP\setup-ollama-win.ps1"; & "$env:TEMP\setup-ollama-win.ps1"
 ```
 
 <details>

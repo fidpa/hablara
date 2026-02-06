@@ -59,7 +59,7 @@ describe("SetupHintsModal", () => {
     const codeElement = document.querySelector("code");
     expect(codeElement).toBeTruthy();
     expect(codeElement?.textContent).toContain("curl -fsSL");
-    expect(codeElement?.textContent).toContain("setup-ollama-quick.sh");
+    expect(codeElement?.textContent).toContain("setup-ollama-mac.sh");
   });
 
   it("should show PowerShell setup command on Windows", async () => {
@@ -70,7 +70,7 @@ describe("SetupHintsModal", () => {
     const codeElement = document.querySelector("code");
     expect(codeElement).toBeTruthy();
     expect(codeElement?.textContent).toContain("Invoke-WebRequest");
-    expect(codeElement?.textContent).toContain("setup-ollama-quick.ps1");
+    expect(codeElement?.textContent).toContain("setup-ollama-win.ps1");
   });
 
   it("should call onClose with true when 'Tour starten' is clicked", async () => {
@@ -133,7 +133,7 @@ describe("SetupHintsModal", () => {
     // Verify clipboard API was called with setup script command (macOS/Linux via mock)
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(
-        "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash"
+        "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash"
       );
     });
 

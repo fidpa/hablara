@@ -48,7 +48,7 @@ export function OllamaTroubleshootingSection({
   const getTerminalCommand = (): string => {
     if (model.includes("custom")) {
       return isWindows()
-        ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"'
+        ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-win.ps1" -OutFile "$env:TEMP\\setup-ollama-win.ps1"; & "$env:TEMP\\setup-ollama-win.ps1"'
         : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash";
     }
     return `ollama pull ${model}`;

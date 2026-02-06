@@ -327,7 +327,7 @@ preflight_checks() {
 
   if [[ "$(uname)" != "Linux" ]]; then
     log_error "Dieses Script ist nur für Linux"
-    log_info "Für macOS: scripts/setup-ollama-quick.sh"
+    log_info "Für macOS: scripts/setup-ollama-mac.sh"
     exit 4
   fi
 

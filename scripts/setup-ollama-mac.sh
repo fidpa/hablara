@@ -2,8 +2,8 @@
 #
 # Hablará - Ollama Quick-Setup Script for macOS
 #
-# Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
-#        ./setup-ollama-quick.sh --model 3b
+# Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
+#        ./setup-ollama-mac.sh --model 3b
 #
 # Exit codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
 

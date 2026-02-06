@@ -33,10 +33,10 @@ const OLLAMA_DOWNLOAD_URL = "https://ollama.com/download";
 const SETUP_SCRIPT_BASE = "https://raw.githubusercontent.com/fidpa/hablara/main/scripts";
 
 /** macOS/Linux one-liner setup command */
-const SETUP_CMD_UNIX = `curl -fsSL ${SETUP_SCRIPT_BASE}/setup-ollama-quick.sh | bash`;
+const SETUP_CMD_UNIX = `curl -fsSL ${SETUP_SCRIPT_BASE}/setup-ollama-mac.sh | bash`;
 
 /** Windows PowerShell setup command */
-const SETUP_CMD_WINDOWS = `Invoke-WebRequest -Uri "${SETUP_SCRIPT_BASE}/setup-ollama-quick.ps1" -OutFile "$env:TEMP\\setup-ollama-quick.ps1"; & "$env:TEMP\\setup-ollama-quick.ps1"`;
+const SETUP_CMD_WINDOWS = `Invoke-WebRequest -Uri "${SETUP_SCRIPT_BASE}/setup-ollama-win.ps1" -OutFile "$env:TEMP\\setup-ollama-win.ps1"; & "$env:TEMP\\setup-ollama-win.ps1"`;
 
 interface SetupHintsModalProps {
   /** Whether the modal is currently visible */

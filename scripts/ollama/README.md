@@ -34,13 +34,13 @@ _Performance ist stark systemabhängig (CPU/GPU, RAM, Modell-Cache). GPU-Beschle
 **Automatisch (empfohlen):**
 ```bash
 # macOS
-./scripts/setup-ollama-quick.sh
+./scripts/setup-ollama-mac.sh
 
 # Linux
 ./scripts/setup-ollama-linux.sh
 
 # Windows
-.\scripts\setup-ollama-quick.ps1
+.\scripts\setup-ollama-win.ps1
 ```
 
 **Manuell:**

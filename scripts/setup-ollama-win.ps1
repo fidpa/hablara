@@ -7,8 +7,8 @@
     Installs Ollama and configures an optimized model for Hablara.
 
 .EXAMPLE
-    .\setup-ollama-quick.ps1
-    .\setup-ollama-quick.ps1 -Model 3b
+    .\setup-ollama-win.ps1
+    .\setup-ollama-win.ps1 -Model 3b
 
 .NOTES
     Exit Codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
@@ -170,7 +170,7 @@ function Show-HelpMessage {
     @"
 Hablara Ollama Quick-Setup Script v$ScriptVersion
 
-Usage: .\setup-ollama-quick.ps1 [-Model <variant>] [-Help]
+Usage: .\setup-ollama-win.ps1 [-Model <variant>] [-Help]
 
 Parameters:
   -Model <variant>   Select model variant (3b, 7b, 14b, 32b)
@@ -183,8 +183,8 @@ Model variants:
   32b  - qwen2.5:32b  (~20GB download, 25GB disk, needs 32GB+ RAM)
 
 Examples:
-  .\setup-ollama-quick.ps1              # Interactive or default (7b)
-  .\setup-ollama-quick.ps1 -Model 3b    # Use 3b model
+  .\setup-ollama-win.ps1              # Interactive or default (7b)
+  .\setup-ollama-win.ps1 -Model 3b    # Use 3b model
 "@ | Write-Host
 }
 

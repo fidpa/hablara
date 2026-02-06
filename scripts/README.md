@@ -13,8 +13,8 @@ Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform 
 **Enthaltene Scripts**:
 - `setup-whisper.sh` / `.ps1` - whisper.cpp (macOS: Metal, Windows: MSVC/CUDA)
 - `setup-whisper-linux.sh` - whisper.cpp (Linux: CPU/CUDA)
-- `setup-ollama-quick.sh` - Ollama + qwen2.5:7b-custom (macOS)
-- `setup-ollama-quick.ps1` - Ollama + qwen2.5:7b-custom (Windows)
+- `setup-ollama-mac.sh` - Ollama + qwen2.5:7b-custom (macOS)
+- `setup-ollama-win.ps1` - Ollama + qwen2.5:7b-custom (Windows)
 - `setup-ollama-linux.sh` - Ollama + qwen2.5:7b-custom (Linux, systemd-Integration)
 - `bump-version.sh` - Versionsnummern synchronisieren
 
@@ -25,7 +25,7 @@ Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform 
 ### macOS
 ```bash
 # 1. Ollama + LLM installieren (One-liner)
-./scripts/setup-ollama-quick.sh
+./scripts/setup-ollama-mac.sh
 
 # 2. Whisper installieren (optional - fuer lokale Transkription)
 ./scripts/setup-whisper.sh
@@ -43,7 +43,7 @@ Setup-Scripts für die Hablará Installation (Whisper, Ollama) - Cross-Platform 
 ### Windows
 ```powershell
 # 1. Ollama + LLM installieren
-.\scripts\setup-ollama-quick.ps1
+.\scripts\setup-ollama-win.ps1
 
 # 2. Whisper installieren (optional)
 .\scripts\setup-whisper.ps1
@@ -87,17 +87,17 @@ Installiert whisper.cpp mit Metal-Acceleration fuer macOS.
 
 ---
 
-### setup-ollama-quick.sh (macOS)
+### setup-ollama-mac.sh (macOS)
 
 **One-Liner Installer** fuer Ollama + optimiertes qwen2.5:7b-custom Model auf macOS.
 
 **Verwendung:**
 ```bash
 # Lokal
-./scripts/setup-ollama-quick.sh
+./scripts/setup-ollama-mac.sh
 
 # Remote (GitHub)
-curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
 ```
 
 **Was das Script macht:**
@@ -227,13 +227,13 @@ Installiert whisper.cpp mit MSVC fuer Windows (optional CUDA).
 
 ---
 
-### setup-ollama-quick.ps1
+### setup-ollama-win.ps1
 
 Installer fuer Ollama + optimiertes qwen2.5:7b-custom Model.
 
 **Verwendung:**
 ```powershell
-.\scripts\setup-ollama-quick.ps1
+.\scripts\setup-ollama-win.ps1
 ```
 
 **Was das Script macht:**
@@ -312,9 +312,9 @@ ollama create qwen2.5:14b-custom -f scripts/ollama/qwen2.5-14b-custom.modelfile
 - Context Window: 32k tokens
 
 **Automatisch via:**
-- macOS: `setup-ollama-quick.sh`
+- macOS: `setup-ollama-mac.sh`
 - Linux: `setup-ollama-linux.sh`
-- Windows: `setup-ollama-quick.ps1`
+- Windows: `setup-ollama-win.ps1`
 
 </details>
 
