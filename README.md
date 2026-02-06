@@ -3,7 +3,7 @@
 > **Finde heraus, was du sagst**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)][releases]
+[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
 [![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
 [![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
@@ -64,14 +64,14 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 **Voraussetzungen:** macOS 10.15+ · 10 GB freier Speicher
 
-**Download:** [GitHub Releases][releases] – Universal DMG (1.3 GB) | Apple Silicon DMG (1.2 GB)
+**Download:** [GitHub Releases][releases] – Universal DMG (~1.3 GB) | Apple Silicon DMG (~1.2 GB)
 
 #### 1️⃣ Hablará installieren
 - DMG öffnen → `Hablará.app` in `Programme` ziehen
 - Sicherheitseinstellungen: "Trotzdem öffnen" (einmalig)
 
 <details>
-<summary>📋 Alternative: Via Homebrew</summary>
+<summary>📋 Alternative: via Homebrew</summary>
 
 ```bash
 brew install --cask fidpa/hablara/hablara
@@ -81,7 +81,7 @@ Updates: `brew upgrade --cask hablara`
 
 </details>
 
-#### 2️⃣ Ollama installieren (empfohlen)
+#### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
@@ -114,27 +114,27 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 
 **Debian/Ubuntu (.deb):**
 ```bash
-sudo dpkg -i hablara_1.0.6_amd64.deb
+sudo dpkg -i hablara_1.0.7_amd64.deb
 sudo apt-get install -f  # Falls Abhängigkeiten fehlen
 ```
 
 **Fedora/RHEL (.rpm):**
 ```bash
-sudo rpm -i hablara-1.0.6-1.x86_64.rpm
-# oder: sudo dnf install hablara-1.0.6-1.x86_64.rpm
+sudo rpm -i hablara-1.0.7-1.x86_64.rpm
+# oder: sudo dnf install hablara-1.0.7-1.x86_64.rpm
 ```
 
 **AppImage (Universal, keine Installation nötig):**
 ```bash
-chmod +x hablara_1.0.6_amd64.AppImage
-./hablara_1.0.6_amd64.AppImage
+chmod +x hablara_1.0.7_amd64.AppImage
+./hablara_1.0.7_amd64.AppImage
 ```
 
 AppImages können mit [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) ins Anwendungsmenü integriert werden.
 
 </details>
 
-#### 2️⃣ Ollama installieren (empfohlen)
+#### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-quick.sh | bash
@@ -213,14 +213,14 @@ sudo dnf install keepassxc  # Fedora/RHEL
 
 **Voraussetzungen:** Windows 10/11 (x64) · 10 GB freier Speicher
 
-**Download:** [GitHub Releases][releases] – NSIS Installer (1.1 GB, empfohlen) | MSI (1.2 GB)
+**Download:** [GitHub Releases][releases] – NSIS Installer (~1.1 GB, empfohlen) | MSI (~1.2 GB)
 
 #### 1️⃣ Hablará installieren
 - `.exe` oder `.msi` herunterladen und ausführen
 - Windows Defender SmartScreen: "Weitere Informationen" → "Trotzdem ausführen"
   _(App ist nicht signiert)_
 
-#### 2️⃣ Ollama installieren (empfohlen)
+#### 2️⃣ Ollama + Sprachmodell installieren (empfohlen)
 
 **Einmalige Vorbereitung:**
 ```powershell
@@ -263,7 +263,7 @@ Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 
 - **Hotkey-Aktivierung** – Starte die Aufnahme mit Ctrl+Shift+D aus jeder Anwendung
 - **Native Audio-Aufnahme** – Professionelle Audioqualität für präzise Transkription (cpal @ 16kHz)
-- **Lokale Transkription** – Audio-Daten bleiben lokal auf dem Gerät (whisper.cpp, MLX-Whisper optional auf Apple Silicon)
+- **Lokale Transkription** – Audio-Daten bleiben auf dem Gerät
 - **LED-Pegelanzeige** – 10-Segment Visualisierung während der Aufnahme (6 grün/2 orange/2 rot)
 
 **AI-Enrichment (7 psychologisch-fundierte Analysen):**
@@ -278,7 +278,7 @@ Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 | **Tonalität** | Sprechweise-Analyse | Formell/Informell, Bestimmt/Zurückhaltend |
 | **Topic-Klassifizierung** | 7 Kategorien | Arbeit, Gesundheit, Beziehungen, etc. |
 
-- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen (Kontext über letzte 3 Nachrichten per React State). Intelligente Abkürzungserkennung für psychologische Fachbegriffe (GFK, CBT, NVC)
+- **RAG-Wissensassistent** – Beantwortet zuverlässig Fragen (Kontext über letzte 3 Nachrichten per React State). Intelligente Abkürzungserkennung für psychologische Fachbegriffe (GFK, CBT, VAD)
 
 
 <details>
@@ -306,8 +306,8 @@ Cloud-LLM erfordert DSGVO-Einwilligung (wird beim ersten Start abgefragt)
 - **Chat-Export** – 5 Formate (Markdown/TXT/PDF/HTML/DOCX) mit Export aller Metadaten
 - **PDF Export** – Einzelne Aufnahmen als PDF exportieren (10 Sektionen: Transkript + alle Analysen)
 - **Sichere API Key Speicherung** – OS-native Verschlüsselung (Keychain/Credential Manager/Secret Service)
-- **Bundle-Size-Optimierung** – INT8-Quantization (-75% Model Size), DMG: 1.3 GB (macOS), NSIS: 1.1 GB (Windows)
-- **Native OS-Integration** – API Keys im System-Keystore (macOS Keychain / Windows Credential Manager / Linux Secret Service), Window State Persistence
+- **Bundle-Size-Optimierung** – INT8-Quantization (-75% Model Size)
+- **Window State Persistence** – Position und Größe werden automatisch gespeichert
 - **Robustheit** – 4 Error Boundaries isolieren Fehler auf Komponentenebene (Chat-Crash ≠ App-Crash)
 
 <details>
@@ -620,7 +620,7 @@ Hablará unterstützt drei LLM-Anbieter:
 **Linux:** Ja, vollständig unterstützt (x64, Ubuntu 20.04+). Download: .deb, .rpm oder .AppImage im [GitHub Releases][releases].
 
 ### Wie groß ist das Ollama-Model?
-**6 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
+**~4.7 GB** (qwen2.5:7b). Leistungsstärkere Alternative: qwen2.5:14b (~9 GB).
 
 ### Wo speichert Hablará Daten?
 
@@ -875,7 +875,7 @@ MIT License – siehe [LICENSE](LICENSE) für Details.
 
 ---
 
-**Autor:** Marc Allgeier | **Version:** 1.0.6
+**Autor:** Marc Allgeier | **Version:** 1.0.7
 
 ---
 

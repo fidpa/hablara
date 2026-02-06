@@ -515,17 +515,15 @@ jobs:
           gh release edit "$VERSION" --draft=false --repo "${{ github.repository }}"
           echo "✅ Release $VERSION published"
 
-  # TODO: Fix Homebrew Cask update (currently failing with "No Cask with this name exists")
-  # Requires: fidpa/homebrew-hablara tap with hablara.rb cask definition
-  # update-homebrew:
-  #   name: Update Homebrew Cask
-  #   needs: publish
-  #   runs-on: macos-14
-  #   steps:
-  #     - name: Bump Homebrew Cask
-  #       uses: macauley/action-homebrew-bump-cask@v1
-  #       with:
-  #         token: ${{ secrets.TAP_GITHUB_TOKEN }}
-  #         cask: hablara
-  #         tap: fidpa/homebrew-hablara
-  #         livecheck: true
+  update-homebrew:
+    name: Update Homebrew Cask
+    needs: publish
+    runs-on: macos-14
+    steps:
+      - name: Bump Homebrew Cask
+        uses: macauley/action-homebrew-bump-cask@v1
+        with:
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          cask: hablara
+          tap: fidpa/homebrew-hablara
+          livecheck: true
