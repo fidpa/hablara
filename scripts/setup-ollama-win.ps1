@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Hablara - Ollama Quick-Setup Script (Windows)
+    Hablara - Ollama Setup Script (Windows)
 
 .DESCRIPTION
     Installs Ollama and configures an optimized model for Hablara.
@@ -51,7 +51,7 @@ $ModelConfigs = @{
     '3b'  = @{ Name = 'qwen2.5:3b';  Size = '~2GB';   DiskGB = 5;  RAMWarn = $false; MinRAM = 0 }
     '7b'  = @{ Name = 'qwen2.5:7b';  Size = '~4.7GB'; DiskGB = 10; RAMWarn = $false; MinRAM = 0 }
     '14b' = @{ Name = 'qwen2.5:14b'; Size = '~9GB';   DiskGB = 15; RAMWarn = $false; MinRAM = 0 }
-    '32b' = @{ Name = 'qwen2.5:32b'; Size = '~20GB';  DiskGB = 25; RAMWarn = $true;  MinRAM = 32 }
+    '32b' = @{ Name = 'qwen2.5:32b'; Size = '~20GB';  DiskGB = 25; RAMWarn = $true;  MinRAM = 48 }
 }
 $DefaultModel = '7b'
 
@@ -144,13 +144,13 @@ function Test-OllamaVersion {
 
 function Test-ModelInference {
     param([string]$Model)
-    Write-Info "Teste Model-Inference..."
+    Write-Info "Teste Modell..."
 
     try {
         $body = @{ model = $Model; prompt = "Sage OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
-        if ($response.response) { Write-Success "Model-Inference-Test erfolgreich"; return $true }
-    } catch { Write-Warn "Model-Inference-Test fehlgeschlagen: $_" }
+        if ($response.response) { Write-Success "Modell-Test erfolgreich"; return $true }
+    } catch { Write-Warn "Modell-Test fehlgeschlagen: $_" }
     return $false
 }
 
@@ -185,13 +185,13 @@ function Test-PortInUse {
 
 function Show-HelpMessage {
     @"
-Hablará Ollama Quick-Setup v$ScriptVersion
+Hablará Ollama Setup für Windows v$ScriptVersion
 
 Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Help]
 
 Parameter:
   -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
-  -Update            Custom-Modell aktualisieren (bei App-Updates)
+  -Update            Hablará-Modell aktualisieren
   -Help              Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -203,7 +203,7 @@ Modell-Varianten:
 Beispiele:
   .\setup-ollama-win.ps1              # Interaktiv oder Standard (7b)
   .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
-  .\setup-ollama-win.ps1 -Update      # Custom-Modell aktualisieren
+  .\setup-ollama-win.ps1 -Update      # Hablará-Modell aktualisieren
 "@ | Write-Host
 }
 
@@ -254,15 +254,15 @@ function Select-ModelConfig {
         $systemRAM = Get-SystemRAMGB
         if ($systemRAM -gt 0 -and $systemRAM -lt $config.MinRAM) {
             Write-Host ""
-            Write-Warn "Das 32b-Modell benötigt mindestens $($config.MinRAM)GB RAM"
-            Write-Warn "Dein System hat nur ${systemRAM}GB RAM"
+            Write-Warn "Das 32b-Modell empfiehlt mindestens $($config.MinRAM)GB RAM"
+            Write-Warn "Dein System hat ${systemRAM}GB RAM"
             Write-Host ""
 
             if (Test-InteractiveSession) {
                 $confirm = Read-Host "Trotzdem fortfahren? [j/N]"
                 if ($confirm -notmatch '^[jJyY]$') { Write-Info "Abgebrochen."; exit 0 }
             } else {
-                Write-Warn "Nicht-interaktiver Modus: Fahre trotzdem fort"
+                Write-Warn "Fahre fort..."
             }
         }
     }
@@ -279,7 +279,7 @@ function Select-ModelConfig {
 function Test-Prerequisites {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
-    Write-Host "  Hablará Ollama Quick-Setup v$ScriptVersion" -ForegroundColor Green
+    Write-Host "  Hablará Ollama Setup v$ScriptVersion (Windows)" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
 
@@ -309,7 +309,7 @@ function Test-Prerequisites {
 
     $gpu = Test-GpuAvailable
     if ($gpu.Available) { Write-Success "GPU erkannt: $($gpu.Type)" }
-    else { Write-Warn "Keine GPU erkannt - CPU-Inferenz (langsamer)" }
+    else { Write-Warn "Keine GPU erkannt - Verarbeitung ohne GPU-Beschleunigung" }
 
     Write-Host ""
 }
@@ -321,7 +321,7 @@ function Test-Prerequisites {
 function Start-OllamaServer {
     try {
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
-        Write-Success "Ollama Server läuft bereits (v$($response.version))"
+        Write-Success "Ollama Server läuft bereits"
         return $true
     } catch {}
 
@@ -372,15 +372,13 @@ function Install-Ollama {
         return
     }
 
-    Write-Info "Installiere Ollama..."
-
     if (Test-CommandExists 'winget') {
         Write-Info "Verwende winget..."
         try {
             & winget install Ollama.Ollama --silent --accept-source-agreements --accept-package-agreements
             if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 3010) {
                 Write-Success "Ollama via winget installiert"
-                if ($LASTEXITCODE -eq 3010) { Write-Warn "Ein Neustart kann erforderlich sein" }
+                if ($LASTEXITCODE -eq 3010) { Write-Warn "Ein Neustart des Computers kann erforderlich sein" }
 
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -399,7 +397,7 @@ function Install-Ollama {
         } catch { Write-Warn "winget Installation fehlgeschlagen: $_" }
     }
 
-    Write-Warn "Automatische Installation nicht verfügbar"
+    Write-Warn "Ollama konnte nicht automatisch installiert werden"
     Write-Host ""
     Write-Host "Bitte Ollama manuell installieren: https://ollama.com/download" -ForegroundColor Cyan
     Write-Host "Danach dieses Script erneut ausführen."
@@ -413,7 +411,6 @@ function Install-Ollama {
 
 function Install-BaseModel {
     Write-Step "Lade Basis-Modell herunter..."
-    Write-Info "Prüfe Modell: $script:ModelName"
 
     if (Test-OllamaModelExists $script:ModelName) {
         Write-Success "Modell bereits vorhanden: $script:ModelName"
@@ -442,38 +439,35 @@ function Install-BaseModel {
 }
 
 function New-CustomModel {
-    Write-Step "Erstelle Custom-Modell..."
-    Write-Info "Prüfe Custom-Modell: $script:CustomModelName"
+    Write-Step "Erstelle Hablará-Modell..."
 
     $actionVerb = "erstellt"
 
     if (Test-OllamaModelExists $script:CustomModelName) {
         if ($Update) {
-            Write-Info "Aktualisiere bestehendes Custom-Modell..."
+            Write-Info "Aktualisiere bestehendes Hablará-Modell..."
             $actionVerb = "aktualisiert"
         } elseif (Test-InteractiveSession) {
             # Interaktiv: Menü anzeigen
             Write-Host ""
-            Write-Info "Custom-Modell $script:CustomModelName bereits vorhanden."
+            Write-Info "Hablará-Modell $script:CustomModelName bereits vorhanden."
             Write-Host ""
             Write-Host "  1) Überspringen (keine Änderung)"
-            Write-Host "  2) Modell aktualisieren (empfohlen bei App-Updates)"
+            Write-Host "  2) Hablará-Modell aktualisieren"
             Write-Host ""
             $updateChoice = Read-Host "Auswahl [1-2, Enter=1]"
             if ($updateChoice -ne '2') {
-                Write-Success "Custom-Modell beibehalten"
+                Write-Success "Hablará-Modell beibehalten"
                 return
             }
-            Write-Info "Aktualisiere bestehendes Custom-Modell..."
+            Write-Info "Aktualisiere bestehendes Hablará-Modell..."
             $actionVerb = "aktualisiert"
         } else {
             # Nicht-interaktiv ohne -Update: überspringen (bisheriges Verhalten)
-            Write-Success "Custom-Modell bereits vorhanden"
+            Write-Success "Hablará-Modell bereits vorhanden"
             return
         }
     }
-
-    Write-Info "Erstelle optimiertes Custom-Modell..."
 
     # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
     $modelfileName = ($script:ModelName -replace ':', '-') + "-custom.modelfile"
@@ -484,14 +478,14 @@ function New-CustomModel {
     if ($externalModelfile -and (Test-Path $externalModelfile)) {
         try {
             $modelfileContent = [System.IO.File]::ReadAllText($externalModelfile)
-            Write-Info "Verwende optimiertes Modelfile: $modelfileName"
+            Write-Info "Verwende Hablará-Konfiguration"
         } catch {
-            Write-Warn "Konnte Modelfile nicht lesen, verwende generisches: $_"
+            Write-Warn "Konnte Konfiguration nicht lesen: $_"
             $externalModelfile = ""
         }
     }
     if (-not $modelfileContent) {
-        Write-Info "Kein spezifisches Modelfile gefunden, verwende generisches"
+        Write-Info "Verwende Standard-Konfiguration"
         $modelfileContent = @"
 FROM $script:ModelName
 
@@ -515,13 +509,13 @@ Wichtig:
 "@
     }
 
-    $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$(Get-Random).tmp"
+    $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$([System.IO.Path]::GetRandomFileName()).tmp"
 
     # Path traversal prevention (case-insensitive, trailing backslash prevents C:\Temp vs C:\Temp2)
     $canonicalPath = [System.IO.Path]::GetFullPath($modelfilePath)
     $canonicalTemp = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
     if (-not $canonicalPath.StartsWith($canonicalTemp, [StringComparison]::OrdinalIgnoreCase)) {
-        Write-Err "Path-Traversal erkannt"
+        Write-Err "Konfigurationsfehler"
         return
     }
 
@@ -542,11 +536,10 @@ Wichtig:
     try {
         & ollama create $script:CustomModelName -f $modelfilePath
         if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Custom-Modell konnte nicht ${actionVerb} werden - verwende Basis-Modell"
+            Write-Warn "Hablará-Modell konnte nicht ${actionVerb} werden - verwende Basis-Modell"
             return
         }
-        Write-Success "Custom-Modell ${actionVerb}: $script:CustomModelName"
-        Write-Info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
+        Write-Success "Hablará-Modell ${actionVerb}: $script:CustomModelName"
     } finally {
         if (Test-Path $modelfilePath) { Remove-Item -Path $modelfilePath -Force -ErrorAction SilentlyContinue }
     }
@@ -560,7 +553,7 @@ function Test-Installation {
     Write-Host ""
     Write-Step "Überprüfe Installation..."
 
-    if (-not (Test-CommandExists 'ollama')) { Write-Err "Ollama Binary nicht gefunden"; return $false }
+    if (-not (Test-CommandExists 'ollama')) { Write-Err "Ollama nicht gefunden"; return $false }
 
     try { $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 }
     catch { Write-Err "Ollama Server nicht erreichbar"; return $false }
@@ -570,14 +563,14 @@ function Test-Installation {
 
     $testModel = $script:ModelName
     if (Test-OllamaModelExists $script:CustomModelName) {
-        Write-Success "Custom-Modell verfügbar: $script:CustomModelName"
+        Write-Success "Hablará-Modell verfügbar: $script:CustomModelName"
         $testModel = $script:CustomModelName
     } else {
-        Write-Warn "Custom-Modell nicht verfügbar (verwende Basis-Modell)"
+        Write-Warn "Hablará-Modell nicht verfügbar (verwende Basis-Modell)"
     }
 
     if (-not (Test-ModelInference -Model $testModel)) {
-        Write-Warn "Inference-Test fehlgeschlagen - teste in der App"
+        Write-Warn "Modell-Test fehlgeschlagen, teste in der App"
     }
 
     Write-Host ""
@@ -608,10 +601,10 @@ function Main {
     Write-Host ""
     $finalModel = if (Test-OllamaModelExists $script:CustomModelName) { $script:CustomModelName } else { $script:ModelName }
 
-    Write-Host "LLM-Einstellungen in der App:" -ForegroundColor Yellow
-    Write-Host "  - Provider: Ollama (Standard)"
-    Write-Host "  - Modell: $finalModel"
-    Write-Host "  - Base URL: http://localhost:11434"
+    Write-Host "LLM-Einstellungen in der App:"
+    Write-Host "   - Provider: Ollama (Standard)"
+    Write-Host "   - Modell: $finalModel"
+    Write-Host "   - Base URL: http://localhost:11434"
     Write-Host ""
     Write-Host "Dokumentation: https://github.com/fidpa/hablara" -ForegroundColor Cyan
     Write-Host ""

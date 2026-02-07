@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-1.1.4-blue.svg)][releases]
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg)][releases]
-[![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.70+-blue.svg)](https://tauri.app/)
+[![Stack](https://img.shields.io/badge/stack-Tauri%202.0%20%7C%20Next.js%2014%20%7C%20Rust%201.77+-blue.svg)](https://tauri.app/)
 [![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/fidpa/homebrew-hablara)
 
 Desktop-App für Selbstreflexion mit Spracherkennung und KI-gestützter Sprachanalyse.
@@ -64,7 +64,7 @@ Sprachanalyse wahlweise lokal (Ollama) oder via Cloud (OpenAI/Anthropic).
 
 **Voraussetzungen:** macOS 10.15+ · 10 GB freier Speicher
 
-**Download:** [GitHub Releases][releases] – Universal DMG (~1.3 GB) | Apple Silicon DMG (~1.2 GB)
+**Download:** [GitHub Releases][releases] – Universal DMG (~1.3 GB, läuft auf ARM64 + Intel)
 
 #### 1️⃣ Hablará installieren
 - DMG öffnen → `Hablará.app` in `Programme` ziehen
@@ -442,7 +442,7 @@ Jetzt weiß ich, wie ich das angehen will."
 **Warum Qwen 2.5 als Modell?**
 - **Mehrsprachig trainiert:** Inkl. Deutsch
 - **4 Größen wählbar:** 3B (schnelle Ergebnisse), 7B (gute Qualität, empfohlen), 14B (hohe Qualität), 32B (beste Qualität)
-- **JSON Compliance:** Zuverlässige strukturierte Outputs für unsere Prompt-Architektur
+- **JSON Compliance:** `format: "json"` API-Parameter erzwingt strukturierte Outputs auf Tokenizer-Ebene (Constrained Decoding)
 - **Angepasstes Modelfile:** Reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
 
 **Warum Multi-Anbieter LLM?**

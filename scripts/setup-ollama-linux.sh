@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Hablará - Ollama Quick-Setup Script for Linux
+# Hablará - Ollama Setup Script for Linux
 #
 # Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash
 #        ./setup-ollama-linux.sh --model 3b
@@ -33,7 +33,7 @@ get_model_config() {
     3b)  echo "qwen2.5:3b|~2GB|5|" ;;
     7b)  echo "qwen2.5:7b|~4.7GB|10|" ;;
     14b) echo "qwen2.5:14b|~9GB|15|" ;;
-    32b) echo "qwen2.5:32b|~20GB|25|32" ;;
+    32b) echo "qwen2.5:32b|~20GB|25|48" ;;
     *)   return 1 ;;
   esac
 }
@@ -171,7 +171,7 @@ check_gpu_available() {
 
 test_model_inference() {
   local model="${1:-$MODEL_NAME}"
-  log_info "Teste Model-Inference..."
+  log_info "Teste Modell..."
 
   local escaped_model response
   escaped_model=$(json_escape_string "$model")
@@ -181,10 +181,10 @@ test_model_inference() {
     2>/dev/null) || true
 
   if [[ -n "$response" ]] && echo "$response" | grep '"response"' > /dev/null; then
-    log_success "Model-Inference-Test erfolgreich"
+    log_success "Modell-Test erfolgreich"
     return 0
   fi
-  log_warn "Model-Inference-Test fehlgeschlagen"
+  log_warn "Modell-Test fehlgeschlagen"
   return 1
 }
 
@@ -205,7 +205,7 @@ wait_for_ollama() {
 
 cleanup() {
   local exit_code=$?
-  [[ $exit_code -ne 0 ]] && log_error "Setup fehlgeschlagen mit Exit-Code: ${exit_code}"
+  [[ $exit_code -ne 0 ]] && log_error "Setup fehlgeschlagen"
 }
 trap cleanup EXIT
 
@@ -215,13 +215,13 @@ trap cleanup EXIT
 
 show_help() {
   cat <<EOF
-Hablará Ollama Quick-Setup für Linux v${SCRIPT_VERSION}
+Hablará Ollama Setup für Linux v${SCRIPT_VERSION}
 
 Verwendung: $0 [OPTIONEN]
 
 Optionen:
   -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
-  --update              Custom-Modell aktualisieren (bei App-Updates)
+  --update              Hablará-Modell aktualisieren
   -h, --help            Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -233,7 +233,7 @@ Modell-Varianten:
 Beispiele:
   $0                    # Interaktiv oder Standard (7b)
   $0 --model 3b         # 3b-Modell verwenden
-  $0 --update           # Custom-Modell aktualisieren
+  $0 --update           # Hablará-Modell aktualisieren
   curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
   curl -fsSL URL | bash -s -- --update  # Update via Pipe
 EOF
@@ -311,8 +311,8 @@ select_model() {
 
     if [[ "$system_ram" -gt 0 && "$system_ram" -lt "${RAM_WARNING}" ]]; then
       echo ""
-      log_warn "Das 32b-Modell benötigt mindestens ${RAM_WARNING}GB RAM"
-      log_warn "Dein System hat nur ${system_ram}GB RAM"
+      log_warn "Das 32b-Modell empfiehlt mindestens ${RAM_WARNING}GB RAM"
+      log_warn "Dein System hat ${system_ram}GB RAM"
       echo ""
 
       if [[ -r /dev/tty ]]; then
@@ -320,7 +320,7 @@ select_model() {
         local confirm; read -r confirm </dev/tty || confirm=""
         [[ ! "$confirm" =~ ^[jJyY]$ ]] && { log_info "Abgebrochen."; exit 0; }
       else
-        log_warn "Nicht-interaktiver Modus: Fahre trotzdem fort"
+        log_warn "Fahre fort..."
       fi
     fi
   fi
@@ -336,7 +336,7 @@ select_model() {
 preflight_checks() {
   echo ""
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
-  echo -e "${COLOR_GREEN}  Hablará Ollama Quick-Setup v${SCRIPT_VERSION} (Linux)${COLOR_RESET}"
+  echo -e "${COLOR_GREEN}  Hablará Ollama Setup v${SCRIPT_VERSION} (Linux)${COLOR_RESET}"
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
   echo ""
 
@@ -374,9 +374,9 @@ preflight_checks() {
   gpu_info=$(check_gpu_available) || true
   case "$gpu_info" in
     nvidia:*) log_success "NVIDIA GPU erkannt: ${gpu_info#nvidia:} (CUDA)" ;;
-    amd_rocm) log_success "AMD GPU erkannt (ROCm, experimentell)" ;;
-    intel_oneapi) log_success "Intel GPU erkannt (oneAPI, experimentell)" ;;
-    cpu) log_warn "Keine GPU erkannt - CPU-Inferenz (langsamer)" ;;
+    amd_rocm) log_success "AMD GPU erkannt (experimentell)" ;;
+    intel_oneapi) log_success "Intel GPU erkannt (experimentell)" ;;
+    cpu) log_warn "Keine GPU erkannt - Verarbeitung ohne GPU-Beschleunigung" ;;
   esac
 
   echo ""
@@ -494,7 +494,6 @@ install_ollama() {
     return 0
   fi
 
-  log_info "Installiere Ollama..."
   if ! curl -fsSL "${OLLAMA_INSTALL_URL}" | sh; then
     log_error "Ollama Installation fehlgeschlagen"
     log_info "Manuelle Installation: https://ollama.com/download"
@@ -512,7 +511,6 @@ install_ollama() {
 
 pull_base_model() {
   log_step "Lade Basis-Modell herunter..."
-  log_info "Prüfe Modell: ${MODEL_NAME}"
 
   if ollama_model_exists "${MODEL_NAME}"; then
     log_success "Modell bereits vorhanden: ${MODEL_NAME}"
@@ -545,42 +543,39 @@ pull_base_model() {
 # Subshell function: isolates EXIT trap for temp file cleanup (no RETURN trap leak)
 create_custom_model() (
   set -euo pipefail
-  log_step "Erstelle Custom-Modell..."
-  log_info "Prüfe Custom-Modell: ${CUSTOM_MODEL_NAME}"
+  log_step "Erstelle Hablará-Modell..."
 
   local action_verb="erstellt"
 
   if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
     # FORCE_UPDATE from parent scope (subshell copy; changes don't propagate back)
     if [[ "$FORCE_UPDATE" == "true" ]]; then
-      log_info "Aktualisiere bestehendes Custom-Modell..."
+      log_info "Aktualisiere bestehendes Hablará-Modell..."
       action_verb="aktualisiert"
     elif exec 3<>/dev/tty; then
       # Interaktiv: Menü über FD3 (TTY), damit stderr-Redirect den Prompt nicht versteckt
       printf "\n" >&3
-      printf "    • Custom-Modell %s bereits vorhanden.\n" "${CUSTOM_MODEL_NAME}" >&3
+      printf "    • Hablará-Modell %s bereits vorhanden.\n" "${CUSTOM_MODEL_NAME}" >&3
       printf "\n" >&3
       printf "  1) Überspringen (keine Änderung)\n" >&3
-      printf "  2) Modell aktualisieren (empfohlen bei App-Updates)\n" >&3
+      printf "  2) Hablará-Modell aktualisieren\n" >&3
       printf "\n" >&3
       printf "Auswahl [1-2, Enter=1]: " >&3
       local update_choice
       IFS= read -r -t 30 update_choice <&3 || update_choice=""
       exec 3>&- 3<&-
       if [[ "$update_choice" != "2" ]]; then
-        log_success "Custom-Modell beibehalten"
+        log_success "Hablará-Modell beibehalten"
         return 0
       fi
-      log_info "Aktualisiere bestehendes Custom-Modell..."
+      log_info "Aktualisiere bestehendes Hablará-Modell..."
       action_verb="aktualisiert"
     else
       # Kein nutzbares TTY → wie non-interaktiv behandeln (Skip)
-      log_success "Custom-Modell bereits vorhanden"
+      log_success "Hablará-Modell bereits vorhanden"
       return 0
     fi
   fi
-
-  log_info "Erstelle optimiertes Custom-Modell..."
 
   # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
   local script_dir="" external_modelfile=""
@@ -598,10 +593,10 @@ create_custom_model() (
   trap 'rm -f -- "$modelfile"' EXIT
 
   if [[ -n "$external_modelfile" ]]; then
-    log_info "Verwende optimiertes Modelfile: ${modelfile_name}"
+    log_info "Verwende Hablará-Konfiguration"
     cp "$external_modelfile" "$modelfile"
   else
-    log_info "Kein spezifisches Modelfile gefunden, verwende generisches"
+    log_info "Verwende Standard-Konfiguration"
     cat > "${modelfile}" <<EOF
 FROM ${MODEL_NAME}
 
@@ -629,12 +624,11 @@ EOF
   ollama create "${CUSTOM_MODEL_NAME}" -f "${modelfile}" || create_result=$?
 
   if [[ $create_result -ne 0 ]]; then
-    log_warn "Custom-Modell konnte nicht ${action_verb} werden - verwende Basis-Modell"
+    log_warn "Hablará-Modell konnte nicht ${action_verb} werden - verwende Basis-Modell"
     return 0
   fi
 
-  log_success "Custom-Modell ${action_verb}: ${CUSTOM_MODEL_NAME}"
-  log_info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
+  log_success "Hablará-Modell ${action_verb}: ${CUSTOM_MODEL_NAME}"
 )
 
 # ============================================================================
@@ -645,7 +639,7 @@ verify_installation() {
   echo ""
   log_step "Überprüfe Installation..."
 
-  command_exists ollama || { log_error "Ollama binary nicht gefunden"; return 1; }
+  command_exists ollama || { log_error "Ollama nicht gefunden"; return 1; }
   curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null || {
     log_error "Ollama Server nicht erreichbar"
     return 1
@@ -658,13 +652,13 @@ verify_installation() {
 
   local test_model="$MODEL_NAME"
   if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
-    log_success "Custom-Modell verfügbar: ${CUSTOM_MODEL_NAME}"
+    log_success "Hablará-Modell verfügbar: ${CUSTOM_MODEL_NAME}"
     test_model="$CUSTOM_MODEL_NAME"
   else
-    log_warn "Custom-Modell nicht verfügbar (verwende Basis-Modell)"
+    log_warn "Hablará-Modell nicht verfügbar (verwende Basis-Modell)"
   fi
 
-  test_model_inference "$test_model" || log_warn "Inference-Test fehlgeschlagen - teste in der App"
+  test_model_inference "$test_model" || log_warn "Modell-Test fehlgeschlagen, teste in der App"
 
   echo ""
   log_success "Setup abgeschlossen!"
