@@ -10,6 +10,7 @@
     .\setup-ollama-win.ps1
     .\setup-ollama-win.ps1 -Model 3b
     .\setup-ollama-win.ps1 -Update
+    .\setup-ollama-win.ps1 -Status
 
 .NOTES
     Exit Codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
@@ -22,6 +23,8 @@ param(
     [string]$Model,
 
     [switch]$Update,
+
+    [switch]$Status,
 
     [switch]$Help
 )
@@ -64,6 +67,11 @@ function Write-Info { param([string]$Message); Write-Host "    $([char]0x2022) "
 function Write-Success { param([string]$Message); Write-Host "    $([char]0x2713) " -ForegroundColor Green -NoNewline; Write-Host $Message }
 function Write-Warn { param([string]$Message); Write-Host "    $([char]0x26A0) " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
 function Write-Err { param([string]$Message); Write-Host "$([char]0x2717) Fehler: $Message" -ForegroundColor Red }
+
+# Status-Check helpers (2-space indent, matching Bash status output format)
+function Write-StatusOk { param([string]$Message); Write-Host "  $([char]0x2713) " -ForegroundColor Green -NoNewline; Write-Host $Message }
+function Write-StatusFail { param([string]$Message); Write-Host "  $([char]0x2717) " -ForegroundColor Red -NoNewline; Write-Host $Message }
+function Write-StatusNote { param([string]$Message); Write-Host "  $([char]0x2022) " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
 
 function Test-CommandExists { param([string]$Command); $null -ne (Get-Command $Command -ErrorAction SilentlyContinue) }
 
@@ -127,30 +135,44 @@ function Test-GpuAvailable {
     return @{ Available = $false; Type = 'CPU' }
 }
 
-function Test-OllamaVersion {
+# Returns version string (e.g. "0.6.2") or "unbekannt"
+function Get-OllamaVersionString {
     try {
         $versionOutput = & ollama --version 2>&1 | Select-Object -First 1
-        if ($versionOutput -match '(\d+\.\d+\.?\d*)') {
-            $currentVersion = $Matches[1]
-            if ((Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
-                Write-Warn "Ollama Version $currentVersion ist älter als empfohlen ($MinOllamaVersion)"
-                Write-Info "Update: winget upgrade Ollama.Ollama"
-                return $false
-            }
-        }
+        if ($versionOutput -match '(\d+\.\d+\.?\d*)') { return $Matches[1] }
     } catch {}
+    return 'unbekannt'
+}
+
+function Test-OllamaVersion {
+    $currentVersion = Get-OllamaVersionString
+    if ($currentVersion -ne 'unbekannt') {
+        if ((Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
+            Write-Warn "Ollama Version $currentVersion ist älter als empfohlen ($MinOllamaVersion)"
+            Write-Info "Update: winget upgrade Ollama.Ollama"
+            return $false
+        }
+    }
     return $true
+}
+
+# Silent inference check: returns $true if model responds, $false otherwise (no log output)
+function Test-ModelResponds {
+    param([string]$Model)
+    try {
+        $body = @{ model = $Model; prompt = "Sage OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
+        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
+        if ($response.response) { return $true }
+    } catch {}
+    return $false
 }
 
 function Test-ModelInference {
     param([string]$Model)
     Write-Info "Teste Modell..."
 
-    try {
-        $body = @{ model = $Model; prompt = "Sage OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
-        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
-        if ($response.response) { Write-Success "Modell-Test erfolgreich"; return $true }
-    } catch { Write-Warn "Modell-Test fehlgeschlagen: $_" }
+    if (Test-ModelResponds -Model $Model) { Write-Success "Modell-Test erfolgreich"; return $true }
+    Write-Warn "Modell-Test fehlgeschlagen"
     return $false
 }
 
@@ -180,6 +202,151 @@ function Test-PortInUse {
 }
 
 # ============================================================================
+# Status Check
+# ============================================================================
+
+function Invoke-StatusCheck {
+    $errors = 0
+
+    Write-Host ""
+    Write-Host "=== Hablará Ollama Status ==="
+    Write-Host ""
+
+    # 1. Ollama installed?
+    if (Test-CommandExists 'ollama') {
+        $currentVersion = Get-OllamaVersionString
+        Write-StatusOk "Ollama installiert (v$currentVersion)"
+        if ($currentVersion -ne 'unbekannt' -and (Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
+            Write-Host "    " -NoNewline; Write-Host "$([char]0x21B3) Update empfohlen (mindestens v${MinOllamaVersion}): winget upgrade Ollama.Ollama" -ForegroundColor Yellow
+        }
+    } else {
+        Write-StatusFail "Ollama nicht gefunden"
+        $errors++
+    }
+
+    # 2. Server reachable?
+    $serverReachable = $false
+    try {
+        $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
+        $serverReachable = $true
+        Write-StatusOk "Server läuft"
+    } catch {
+        Write-StatusFail "Server nicht erreichbar"
+        $errors++
+    }
+
+    # 3. GPU detected?
+    $gpu = Test-GpuAvailable
+    if ($gpu.Available) {
+        $gpuLabel = switch ($gpu.Type) {
+            'NVIDIA'   { 'NVIDIA (CUDA-Beschleunigung)' }
+            'AMD ROCm' { 'AMD (ROCm-Beschleunigung, experimentell)' }
+            default     { $gpu.Type }
+        }
+        Write-StatusOk "GPU: $gpuLabel"
+    } else {
+        Write-StatusNote "Keine GPU — Verarbeitung ohne GPU-Beschleunigung"
+    }
+
+    # 4. Base models present? (scan all variants, largest first)
+    $baseModelsFound = @()
+    foreach ($variant in @('32b', '14b', '7b', '3b')) {
+        $modelName = $ModelConfigs[$variant].Name
+        if (Test-OllamaModelExists $modelName) { $baseModelsFound += $modelName }
+    }
+
+    if ($baseModelsFound.Count -eq 1) {
+        Write-StatusOk "Basis-Modell: $($baseModelsFound[0])"
+    } elseif ($baseModelsFound.Count -gt 1) {
+        Write-StatusOk "Basis-Modelle:"
+        foreach ($m in $baseModelsFound) {
+            Write-Host "    " -NoNewline; Write-Host "$([char]0x2713) $m" -ForegroundColor Green
+        }
+    } else {
+        Write-StatusFail "Kein Basis-Modell gefunden"
+        $errors++
+    }
+
+    # 5. Custom models present? (scan all variants, largest first)
+    $customModelsFound = @()
+    foreach ($variant in @('32b', '14b', '7b', '3b')) {
+        $modelName = "$($ModelConfigs[$variant].Name)-custom"
+        if (Test-OllamaModelExists $modelName) { $customModelsFound += $modelName }
+    }
+
+    if ($customModelsFound.Count -eq 1) {
+        Write-StatusOk "Hablará-Modell: $($customModelsFound[0])"
+        if ($baseModelsFound.Count -eq 0) {
+            Write-Host "    " -NoNewline; Write-Host "$([char]0x21B3) Basis-Modell fehlt — Hablará-Modell benötigt es als Grundlage" -ForegroundColor Yellow
+        }
+    } elseif ($customModelsFound.Count -gt 1) {
+        Write-StatusOk "Hablará-Modelle:"
+        foreach ($m in $customModelsFound) {
+            Write-Host "    " -NoNewline; Write-Host "$([char]0x2713) $m" -ForegroundColor Green
+        }
+        if ($baseModelsFound.Count -eq 0) {
+            Write-Host "    " -NoNewline; Write-Host "$([char]0x21B3) Basis-Modell fehlt — Hablará-Modell benötigt es als Grundlage" -ForegroundColor Yellow
+        }
+    } else {
+        Write-StatusFail "Kein Hablará-Modell gefunden"
+        $errors++
+    }
+
+    # 6. Model inference works? (use smallest model for fastest check)
+    $testModel = if ($customModelsFound.Count -gt 0) { $customModelsFound[-1] } elseif ($baseModelsFound.Count -gt 0) { $baseModelsFound[-1] } else { $null }
+    if (-not $serverReachable) {
+        Write-StatusNote "Modell-Test übersprungen (Server nicht erreichbar)"
+    } elseif ($testModel) {
+        if (Test-ModelResponds -Model $testModel) {
+            Write-StatusOk "Modell antwortet"
+        } else {
+            Write-StatusFail "Modell antwortet nicht"
+            $errors++
+        }
+    } else {
+        Write-StatusFail "Modell antwortet nicht"
+        $errors++
+    }
+
+    # 7. Storage usage (only Hablará-relevant qwen2.5 models, parsed from ollama list)
+    $allModels = @($baseModelsFound) + @($customModelsFound)
+    if ($allModels.Count -gt 0 -and (Test-CommandExists 'ollama')) {
+        try {
+            $ollamaList = & ollama list 2>$null
+            $totalGB = 0.0
+            foreach ($m in $allModels) {
+                $line = $ollamaList | Where-Object { $_ -match "^$([regex]::Escape($m))\s" } | Select-Object -First 1
+                if ($line -and $line -match '(\d+\.?\d*)\s*(KB|MB|GB|TB)') {
+                    $val = [double]$Matches[1]
+                    switch ($Matches[2]) {
+                        'TB' { $totalGB += $val * 1024 }
+                        'GB' { $totalGB += $val }
+                        'MB' { $totalGB += $val / 1024 }
+                        'KB' { $totalGB += $val / 1048576 }
+                    }
+                }
+            }
+            $totalGB = [math]::Round($totalGB, 1)
+            Write-StatusNote "Speicherverbrauch (Hablará): ~${totalGB} GB"
+        } catch {
+            Write-StatusNote "Speicherverbrauch: nicht ermittelbar"
+        }
+    } else {
+        Write-StatusNote "Speicherverbrauch: nicht ermittelbar"
+    }
+
+    Write-Host ""
+    if ($errors -eq 0) {
+        Write-Host "Alles in Ordnung." -ForegroundColor Green
+    } else {
+        Write-Host "Probleme gefunden. Starte das Setup erneut oder prüfe die Ollama-Installation." -ForegroundColor Red
+    }
+    Write-Host ""
+
+    return [math]::Min($errors, 1)
+}
+
+# ============================================================================
 # Model Selection
 # ============================================================================
 
@@ -187,11 +354,12 @@ function Show-HelpMessage {
     @"
 Hablará Ollama Setup für Windows v$ScriptVersion
 
-Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Help]
+Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Status] [-Help]
 
 Parameter:
   -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
   -Update            Hablará-Modell aktualisieren
+  -Status            Ollama-Installation prüfen (Health-Check)
   -Help              Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -204,6 +372,7 @@ Beispiele:
   .\setup-ollama-win.ps1              # Interaktiv oder Standard (7b)
   .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
   .\setup-ollama-win.ps1 -Update      # Hablará-Modell aktualisieren
+  .\setup-ollama-win.ps1 -Status      # Installation prüfen
 "@ | Write-Host
 }
 
@@ -227,10 +396,37 @@ function Show-ModelMenu {
     }
 }
 
+function Show-MainMenu {
+    Write-Host ""
+    Write-Host "Wähle eine Aktion:" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  1) Ollama einrichten oder aktualisieren"
+    Write-Host "  2) Status prüfen"
+    Write-Host ""
+    $choice = Read-Host "Auswahl [1-2, Enter=1]"
+
+    switch ($choice) {
+        '2' { return 'status' }
+        default { return 'setup' }
+    }
+}
+
 function Select-ModelConfig {
     param([string]$RequestedModel)
 
     if ($Help) { Show-HelpMessage; exit 0 }
+    if ($Status) { $exitCode = Invoke-StatusCheck; exit $exitCode }
+
+    $hasExplicitFlags = $Update -or (-not [string]::IsNullOrEmpty($RequestedModel))
+
+    # Interactive main menu (only when no explicit flags and interactive session)
+    if (-not $hasExplicitFlags -and (Test-InteractiveSession)) {
+        $action = Show-MainMenu
+        if ($action -eq 'status') {
+            $exitCode = Invoke-StatusCheck
+            exit $exitCode
+        }
+    }
 
     $selectedModel = $RequestedModel
     if ([string]::IsNullOrEmpty($selectedModel)) {

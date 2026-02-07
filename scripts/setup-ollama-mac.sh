@@ -25,6 +25,7 @@ MODEL_SIZE=""
 REQUIRED_DISK_SPACE_GB=0
 RAM_WARNING=""
 FORCE_UPDATE=false
+STATUS_CHECK_MODE=false
 
 # Model config lookup (Bash 3.2 compatible - no associative arrays)
 # Returns: model_name|download_size|disk_gb|ram_warning_gb
@@ -128,12 +129,22 @@ version_gte() {
   fi
 }
 
-check_ollama_version() {
-  local version_output current_version
+# Returns version string (e.g. "0.6.2") or "unbekannt" — no log output
+get_ollama_version_string() {
+  local version_output
   version_output=$(ollama --version 2>&1 | head -1)
-
   if [[ $version_output =~ ([0-9]+\.[0-9]+\.?[0-9]*) ]]; then
-    current_version="${BASH_REMATCH[1]}"
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo "unbekannt"
+  fi
+}
+
+check_ollama_version() {
+  local current_version
+  current_version=$(get_ollama_version_string)
+
+  if [[ "$current_version" != "unbekannt" ]]; then
     if ! version_gte "$current_version" "$MIN_OLLAMA_VERSION"; then
       log_warn "Ollama Version $current_version ist älter als empfohlen ($MIN_OLLAMA_VERSION)"
       log_info "Update: brew upgrade ollama"
@@ -156,10 +167,9 @@ check_gpu_available() {
   echo "cpu"; return 1
 }
 
-test_model_inference() {
-  local model="${1:-$MODEL_NAME}"
-  log_info "Teste Modell..."
-
+# Silent inference check: returns 0 if model responds, 1 otherwise (no log output)
+_check_model_responds() {
+  local model="$1"
   local escaped_model response
   escaped_model=$(json_escape_string "$model")
   response=$(curl -sf --max-time 60 "${OLLAMA_API_URL}/api/generate" \
@@ -167,7 +177,14 @@ test_model_inference() {
     -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Sage OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
     2>/dev/null) || true
 
-  if [[ -n "$response" ]] && echo "$response" | grep '"response"' > /dev/null; then
+  [[ -n "$response" ]] && echo "$response" | grep '"response"' > /dev/null
+}
+
+test_model_inference() {
+  local model="${1:-$MODEL_NAME}"
+  log_info "Teste Modell..."
+
+  if _check_model_responds "$model"; then
     log_success "Modell-Test erfolgreich"
     return 0
   fi
@@ -192,9 +209,164 @@ wait_for_ollama() {
 
 cleanup() {
   local exit_code=$?
-  [[ $exit_code -ne 0 ]] && log_error "Setup fehlgeschlagen"
+  if [[ $exit_code -ne 0 && "$STATUS_CHECK_MODE" == "false" ]]; then
+    log_error "Setup fehlgeschlagen"
+  fi
 }
 trap cleanup EXIT
+
+# ============================================================================
+# Status Check
+# ============================================================================
+
+run_status_check() {
+  STATUS_CHECK_MODE=true
+  local errors=0
+
+  echo ""
+  echo "=== Hablará Ollama Status ==="
+  echo ""
+
+  # 1. Ollama installed?
+  if command_exists ollama; then
+    local current_version
+    current_version=$(get_ollama_version_string)
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Ollama installiert (v${current_version})"
+    if [[ "$current_version" != "unbekannt" ]] && ! version_gte "$current_version" "$MIN_OLLAMA_VERSION"; then
+      echo -e "    ${COLOR_YELLOW}↳ Update empfohlen (mindestens v${MIN_OLLAMA_VERSION}): brew upgrade ollama${COLOR_RESET}"
+    fi
+  else
+    echo -e "  ${COLOR_RED}✗${COLOR_RESET} Ollama nicht gefunden"
+    errors=$((errors + 1))
+  fi
+
+  # 2. Server reachable?
+  local server_reachable=false
+  if curl -sf --max-time 5 "${OLLAMA_API_URL}/api/version" &> /dev/null; then
+    server_reachable=true
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Server läuft"
+  else
+    echo -e "  ${COLOR_RED}✗${COLOR_RESET} Server nicht erreichbar"
+    errors=$((errors + 1))
+  fi
+
+  # 3. GPU detected?
+  local gpu_type
+  gpu_type=$(check_gpu_available) || true
+  case "$gpu_type" in
+    apple_silicon) echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} GPU: Apple Silicon (Metal-Beschleunigung)" ;;
+    nvidia)        echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} GPU: NVIDIA (CUDA-Beschleunigung)" ;;
+    *)             echo -e "  ${COLOR_YELLOW}•${COLOR_RESET} Keine GPU — Verarbeitung ohne GPU-Beschleunigung" ;;
+  esac
+
+  # 4. Base models present? (scan all variants, largest first)
+  local base_models_found=()
+  local variant
+  for variant in 32b 14b 7b 3b; do
+    local config_line
+    config_line=$(get_model_config "$variant") || continue
+    local model_name="${config_line%%|*}"
+    if ollama_model_exists "$model_name"; then
+      base_models_found+=("$model_name")
+    fi
+  done
+
+  if [[ ${#base_models_found[@]} -eq 1 ]]; then
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Basis-Modell: ${base_models_found[0]}"
+  elif [[ ${#base_models_found[@]} -gt 1 ]]; then
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Basis-Modelle:"
+    for model in "${base_models_found[@]}"; do
+      echo -e "    ${COLOR_GREEN}✓${COLOR_RESET} ${model}"
+    done
+  else
+    echo -e "  ${COLOR_RED}✗${COLOR_RESET} Kein Basis-Modell gefunden"
+    errors=$((errors + 1))
+  fi
+
+  # 5. Custom models present? (scan all variants, largest first)
+  local custom_models_found=()
+  for variant in 32b 14b 7b 3b; do
+    local config_line
+    config_line=$(get_model_config "$variant") || continue
+    local model_name="${config_line%%|*}"
+    if ollama_model_exists "${model_name}-custom"; then
+      custom_models_found+=("${model_name}-custom")
+    fi
+  done
+
+  if [[ ${#custom_models_found[@]} -eq 1 ]]; then
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Hablará-Modell: ${custom_models_found[0]}"
+    if [[ ${#base_models_found[@]} -eq 0 ]]; then
+      echo -e "    ${COLOR_YELLOW}↳ Basis-Modell fehlt — Hablará-Modell benötigt es als Grundlage${COLOR_RESET}"
+    fi
+  elif [[ ${#custom_models_found[@]} -gt 1 ]]; then
+    echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Hablará-Modelle:"
+    for model in "${custom_models_found[@]}"; do
+      echo -e "    ${COLOR_GREEN}✓${COLOR_RESET} ${model}"
+    done
+    if [[ ${#base_models_found[@]} -eq 0 ]]; then
+      echo -e "    ${COLOR_YELLOW}↳ Basis-Modell fehlt — Hablará-Modell benötigt es als Grundlage${COLOR_RESET}"
+    fi
+  else
+    echo -e "  ${COLOR_RED}✗${COLOR_RESET} Kein Hablará-Modell gefunden"
+    errors=$((errors + 1))
+  fi
+
+  # 6. Model inference works? (use smallest model for fastest check)
+  local last_custom=${#custom_models_found[@]}
+  local last_base=${#base_models_found[@]}
+  local test_model=""
+  if [[ $last_custom -gt 0 ]]; then
+    test_model="${custom_models_found[$((last_custom - 1))]}"
+  elif [[ $last_base -gt 0 ]]; then
+    test_model="${base_models_found[$((last_base - 1))]}"
+  fi
+  if [[ "$server_reachable" != "true" ]]; then
+    echo -e "  ${COLOR_YELLOW}•${COLOR_RESET} Modell-Test übersprungen (Server nicht erreichbar)"
+  elif [[ -n "$test_model" ]]; then
+    if _check_model_responds "$test_model"; then
+      echo -e "  ${COLOR_GREEN}✓${COLOR_RESET} Modell antwortet"
+    else
+      echo -e "  ${COLOR_RED}✗${COLOR_RESET} Modell antwortet nicht"
+      errors=$((errors + 1))
+    fi
+  else
+    echo -e "  ${COLOR_RED}✗${COLOR_RESET} Modell antwortet nicht"
+    errors=$((errors + 1))
+  fi
+
+  # 7. Storage usage (only Hablará-relevant qwen2.5 models, parsed from ollama list)
+  local all_models=("${base_models_found[@]}" "${custom_models_found[@]}")
+  if [[ ${#all_models[@]} -gt 0 ]] && command_exists ollama; then
+    local total_gb=0 ollama_list
+    ollama_list=$(ollama list 2>/dev/null) || true
+    for model in "${all_models[@]}"; do
+      local size_str
+      size_str=$(echo "$ollama_list" | awk -v m="$model" '$1 == m {print $3, $4}')
+      if [[ "$size_str" =~ ([0-9.]+)[[:space:]]*([KMGT]?B) ]]; then
+        local val="${BASH_REMATCH[1]}" unit="${BASH_REMATCH[2]}"
+        case "$unit" in
+          GB) total_gb=$(awk "BEGIN {printf \"%.1f\", $total_gb + $val}") ;;
+          MB) total_gb=$(awk "BEGIN {printf \"%.1f\", $total_gb + $val / 1024}") ;;
+          KB) total_gb=$(awk "BEGIN {printf \"%.1f\", $total_gb + $val / 1048576}") ;;
+        esac
+      fi
+    done
+    echo -e "  ${COLOR_YELLOW}•${COLOR_RESET} Speicherverbrauch (Hablará): ~${total_gb} GB"
+  else
+    echo -e "  ${COLOR_YELLOW}•${COLOR_RESET} Speicherverbrauch: nicht ermittelbar"
+  fi
+
+  echo ""
+  if [[ $errors -eq 0 ]]; then
+    echo -e "${COLOR_GREEN}Alles in Ordnung.${COLOR_RESET}"
+  else
+    echo -e "${COLOR_RED}Probleme gefunden. Starte das Setup erneut oder prüfe die Ollama-Installation.${COLOR_RESET}"
+  fi
+  echo ""
+
+  [[ $errors -eq 0 ]]
+}
 
 # ============================================================================
 # Model Selection
@@ -209,6 +381,7 @@ Verwendung: $0 [OPTIONEN]
 Optionen:
   -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
   --update              Hablará-Modell aktualisieren
+  --status              Ollama-Installation prüfen (Health-Check)
   -h, --help            Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -221,6 +394,7 @@ Beispiele:
   $0                    # Interaktiv oder Standard (7b)
   $0 --model 3b         # 3b-Modell verwenden
   $0 --update           # Hablará-Modell aktualisieren
+  $0 --status           # Installation prüfen
   curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
   curl -fsSL URL | bash -s -- --update  # Update via Pipe
 EOF
@@ -262,19 +436,47 @@ parse_model_config() {
   return 0
 }
 
+show_main_menu() {
+  echo "" >&2
+  echo -e "${COLOR_CYAN}Wähle eine Aktion:${COLOR_RESET}" >&2
+  echo "" >&2
+  echo "  1) Ollama einrichten oder aktualisieren" >&2
+  echo "  2) Status prüfen" >&2
+  echo "" >&2
+  echo -n "Auswahl [1-2, Enter=1]: " >&2
+
+  local choice
+  read -r choice </dev/tty || choice=""
+  case "$choice" in
+    2) echo "status" ;;
+    *) echo "setup" ;;
+  esac
+}
+
 select_model() {
   local requested_model=""
+  local has_explicit_flags=false
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -m|--model)
         [[ -z "${2:-}" ]] && { log_error "Option $1 benötigt ein Argument"; exit 1; }
-        requested_model="$2"; shift 2 ;;
-      --update) FORCE_UPDATE=true; shift ;;
+        requested_model="$2"; has_explicit_flags=true; shift 2 ;;
+      --update) FORCE_UPDATE=true; has_explicit_flags=true; shift ;;
+      --status) local _rc=0; run_status_check || _rc=$?; exit $_rc ;;
       -h|--help) show_help; exit 0 ;;
       *) log_error "Unbekannte Option: $1"; exit 1 ;;
     esac
   done
+
+  # Interactive main menu (only when no explicit flags and TTY available)
+  if [[ "$has_explicit_flags" == "false" && -z "$requested_model" && -r /dev/tty ]]; then
+    local action
+    action=$(show_main_menu) || action="setup"
+    if [[ "$action" == "status" ]]; then
+      local _rc=0; run_status_check || _rc=$?; exit $_rc
+    fi
+  fi
 
   if [[ -z "$requested_model" ]]; then
     # /dev/tty allows interactive input even when piped via curl | bash
