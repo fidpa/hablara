@@ -22,15 +22,20 @@ readonly MIN_OLLAMA_VERSION="0.3.0"
 MODEL_NAME=""
 CUSTOM_MODEL_NAME=""
 MODEL_SIZE=""
-REQUIRED_DISK_SPACE_GB=10
+REQUIRED_DISK_SPACE_GB=0
+RAM_WARNING=""
 
-# Format: model_name|download_size|disk_gb|ram_warning_gb
-declare -A MODEL_CONFIGS=(
-  ["3b"]="qwen2.5:3b|~2GB|5|"
-  ["7b"]="qwen2.5:7b|~4.7GB|10|"
-  ["14b"]="qwen2.5:14b|~9GB|15|"
-  ["32b"]="qwen2.5:32b|~20GB|25|32"
-)
+# Model config lookup (Bash 3.2 compatible - no associative arrays)
+# Returns: model_name|download_size|disk_gb|ram_warning_gb
+get_model_config() {
+  case "${1:-}" in
+    3b)  echo "qwen2.5:3b|~2GB|5|" ;;
+    7b)  echo "qwen2.5:7b|~4.7GB|10|" ;;
+    14b) echo "qwen2.5:14b|~9GB|15|" ;;
+    32b) echo "qwen2.5:32b|~20GB|25|32" ;;
+    *)   return 1 ;;
+  esac
+}
 readonly DEFAULT_MODEL="7b"
 
 if [[ -t 1 ]]; then
@@ -53,7 +58,7 @@ log_step() { echo -e "\n${COLOR_BLUE}==>${COLOR_RESET} ${COLOR_GREEN}${1}${COLOR
 log_info() { echo -e "    ${COLOR_YELLOW}•${COLOR_RESET} ${1}"; }
 log_success() { echo -e "    ${COLOR_GREEN}✓${COLOR_RESET} ${1}"; }
 log_warn() { echo -e "    ${COLOR_YELLOW}⚠${COLOR_RESET} ${1}" >&2; }
-log_error() { echo -e "${COLOR_RED}✗ Error: ${1}${COLOR_RESET}" >&2; }
+log_error() { echo -e "${COLOR_RED}✗ Fehler: ${1}${COLOR_RESET}" >&2; }
 
 command_exists() { command -v "$1" &> /dev/null; }
 
@@ -88,8 +93,8 @@ get_free_space_gb() {
   mkdir -p "${check_path}" 2>/dev/null || check_path="${HOME}"
 
   if command_exists df; then
-    free_space=$(df -g "${check_path}" 2>/dev/null | tail -1 | awk '{print $4}')
-    echo "${free_space:-0}"
+    free_space=$(df -g "${check_path}" 2>/dev/null | tail -1 | awk '{print $4}' || true)
+    [[ "${free_space:-}" =~ ^[0-9]+$ ]] && echo "$free_space" || echo "0"
   else
     echo "0"
   fi
@@ -139,9 +144,8 @@ check_ollama_version() {
 
 check_gpu_available() {
   if [[ "$(uname)" == "Darwin" ]]; then
-    local cpu_brand
-    cpu_brand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo "")
-    [[ "$cpu_brand" == *"Apple"* ]] && { echo "apple_silicon"; return 0; }
+    # uname -m is more reliable than sysctl for detecting Apple Silicon
+    [[ "$(uname -m)" == "arm64" ]] && { echo "apple_silicon"; return 0; }
   fi
 
   if command_exists nvidia-smi && nvidia-smi &>/dev/null; then
@@ -159,7 +163,7 @@ test_model_inference() {
   escaped_model=$(json_escape_string "$model")
   response=$(curl -sf --max-time 60 "${OLLAMA_API_URL}/api/generate" \
     -H "Content-Type: application/json" \
-    -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Say OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
+    -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Sage OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
     2>/dev/null) || true
 
   if [[ -n "$response" ]] && echo "$response" | grep '"response"' > /dev/null; then
@@ -197,24 +201,24 @@ trap cleanup EXIT
 
 show_help() {
   cat <<EOF
-Hablará Ollama Quick-Setup Script v${SCRIPT_VERSION}
+Hablará Ollama Quick-Setup v${SCRIPT_VERSION}
 
-Usage: $0 [OPTIONS]
+Verwendung: $0 [OPTIONEN]
 
-Options:
-  -m, --model VARIANT   Select model variant (3b, 7b, 14b, 32b)
-  -h, --help            Show this help message
+Optionen:
+  -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
+  -h, --help            Diese Hilfe anzeigen
 
-Model variants:
-  3b   - qwen2.5:3b   (~2GB download, 5GB disk)
-  7b   - qwen2.5:7b   (~4.7GB download, 10GB disk) [DEFAULT]
-  14b  - qwen2.5:14b  (~9GB download, 15GB disk)
-  32b  - qwen2.5:32b  (~20GB download, 25GB disk, needs 32GB+ RAM)
+Modell-Varianten:
+  3b   - qwen2.5:3b   Schnelle Ergebnisse, läuft auf jedem modernen Gerät
+  7b   - qwen2.5:7b   Gute Qualität, benötigt leistungsfähige Hardware [STANDARD]
+  14b  - qwen2.5:14b  Hohe Qualität, benötigt starke Hardware
+  32b  - qwen2.5:32b  Beste Qualität, benötigt sehr starke Hardware
 
-Examples:
-  $0                    # Interactive or default (7b)
-  $0 --model 3b         # Use 3b model
-  curl -fsSL URL | bash -s -- -m 14b  # Pipe with argument
+Beispiele:
+  $0                    # Interaktiv oder Standard (7b)
+  $0 --model 3b         # 3b-Modell verwenden
+  curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
 EOF
 }
 
@@ -229,24 +233,25 @@ show_model_menu() {
   echo "" >&2
   echo -e "${COLOR_CYAN}Wähle ein Modell:${COLOR_RESET}" >&2
   echo "" >&2
-  echo "  1) 3b  - qwen2.5:3b   (~2GB, schnell, weniger genau)" >&2
-  echo "  2) 7b  - qwen2.5:7b   (~4.7GB, ausgewogen) [EMPFOHLEN]" >&2
-  echo "  3) 14b - qwen2.5:14b  (~9GB, genauer)" >&2
-  echo "  4) 32b - qwen2.5:32b  (~20GB, beste Qualität, 32GB+ RAM)" >&2
+  echo "  1) 3b  - Schnelle Ergebnisse, läuft auf jedem modernen Gerät" >&2
+  echo "  2) 7b  - Gute Qualität, benötigt leistungsfähige Hardware [EMPFOHLEN]" >&2
+  echo "  3) 14b - Hohe Qualität, benötigt starke Hardware" >&2
+  echo "  4) 32b - Beste Qualität, benötigt sehr starke Hardware" >&2
   echo "" >&2
   echo -n "Auswahl [1-4, Enter=2]: " >&2
 
   local choice
-  read -r choice </dev/tty
+  read -r choice </dev/tty || choice=""
   case "$choice" in
     1) echo "3b" ;; 2) echo "7b" ;; 3) echo "14b" ;; 4) echo "32b" ;; *) echo "7b" ;;
   esac
 }
 
+# IMPORTANT: Must run in parent shell (not subshell) - sets global variables
 parse_model_config() {
   local variant="$1"
-  local config="${MODEL_CONFIGS[$variant]:-}"
-  [[ -z "$config" ]] && return 1
+  local config
+  config=$(get_model_config "$variant") || return 1
 
   IFS='|' read -r MODEL_NAME MODEL_SIZE REQUIRED_DISK_SPACE_GB RAM_WARNING <<< "$config"
   CUSTOM_MODEL_NAME="${MODEL_NAME}-custom"
@@ -268,7 +273,11 @@ select_model() {
 
   if [[ -z "$requested_model" ]]; then
     # /dev/tty allows interactive input even when piped via curl | bash
-    [[ -e /dev/tty ]] && requested_model=$(show_model_menu) || requested_model="$DEFAULT_MODEL"
+    if [[ -r /dev/tty ]]; then
+      requested_model=$(show_model_menu) || requested_model="$DEFAULT_MODEL"
+    else
+      requested_model="$DEFAULT_MODEL"
+    fi
   fi
 
   if ! parse_model_config "$requested_model"; then
@@ -288,9 +297,9 @@ select_model() {
       log_warn "Dein System hat nur ${system_ram}GB RAM"
       echo ""
 
-      if [[ -e /dev/tty ]]; then
+      if [[ -r /dev/tty ]]; then
         echo -n "Trotzdem fortfahren? [j/N]: "
-        local confirm; read -r confirm </dev/tty
+        local confirm; read -r confirm </dev/tty || confirm=""
         [[ ! "$confirm" =~ ^[jJyY]$ ]] && { log_info "Abgebrochen."; exit 0; }
       else
         log_warn "Nicht-interaktiver Modus: Fahre trotzdem fort"
@@ -313,7 +322,7 @@ preflight_checks() {
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
   echo ""
 
-  log_step "Running pre-flight checks..."
+  log_step "Führe Vorab-Prüfungen durch..."
 
   if [[ "$(uname)" != "Darwin" ]]; then
     log_error "Dieses Script ist nur für macOS"
@@ -329,14 +338,14 @@ preflight_checks() {
   fi
   log_success "Speicherplatz: ${free_space}GB verfügbar"
 
-  if ! curl -sf --connect-timeout 5 "https://ollama.com" &> /dev/null; then
+  if ! curl -sf --connect-timeout 5 --max-time 10 "https://ollama.com" &> /dev/null; then
     log_error "Keine Netzwerkverbindung zu ollama.com"
     exit 3
   fi
   log_success "Netzwerkverbindung OK"
 
   local gpu_type
-  gpu_type=$(check_gpu_available)
+  gpu_type=$(check_gpu_available) || true
   case "$gpu_type" in
     apple_silicon) log_success "Apple Silicon erkannt (Metal-Beschleunigung)" ;;
     nvidia) log_success "NVIDIA GPU erkannt (CUDA-Beschleunigung)" ;;
@@ -353,7 +362,8 @@ preflight_checks() {
 port_in_use() {
   local port="${1:-11434}"
   if command_exists lsof; then
-    lsof -i ":${port}" &>/dev/null
+    # -sTCP:LISTEN filters out ESTABLISHED/TIME_WAIT false positives
+    lsof -nP -iTCP:"${port}" -sTCP:LISTEN &>/dev/null
   elif command_exists nc; then
     nc -z 127.0.0.1 "${port}" &>/dev/null
   elif [[ "$BASH_VERSION" ]]; then
@@ -368,29 +378,29 @@ start_ollama_server() {
     log_success "Ollama Server läuft bereits"; return 0
   }
 
+  # Port might be in use by starting server - delegate to wait_for_ollama (30s)
   if port_in_use 11434; then
     log_info "Port 11434 ist belegt, warte auf Ollama API..."
-    for _ in {1..10}; do
-      sleep 1
-      curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null && {
-        log_success "Ollama Server ist bereit"; return 0
-      }
-    done
+    wait_for_ollama && return 0
     log_warn "Port 11434 belegt, aber Ollama API antwortet nicht"
     return 1
   fi
 
   # Try launchd (Ollama.app installation)
-  [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]] && {
+  if [[ -f ~/Library/LaunchAgents/com.ollama.ollama.plist ]]; then
     launchctl load ~/Library/LaunchAgents/com.ollama.ollama.plist 2>/dev/null || true
-    return 0
-  }
+    sleep 2
+    curl -sf "${OLLAMA_API_URL}/api/version" &>/dev/null && return 0
+    # launchd start didn't produce API - fall through to next method
+  fi
 
   # Try Ollama.app
-  [[ -d "/Applications/Ollama.app" ]] && {
+  if [[ -d "/Applications/Ollama.app" ]]; then
     open -a Ollama 2>/dev/null || true
-    return 0
-  }
+    sleep 3
+    curl -sf "${OLLAMA_API_URL}/api/version" &>/dev/null && return 0
+    # Ollama.app start didn't produce API - fall through to nohup
+  fi
 
   # Fallback: nohup
   if command_exists ollama; then
@@ -398,7 +408,7 @@ start_ollama_server() {
     local ollama_pid=$!
     sleep 2
     kill -0 "$ollama_pid" 2>/dev/null && return 0
-    log_warn "Ollama process failed to start"
+    log_warn "Ollama Prozess konnte nicht gestartet werden"
     return 1
   fi
 
@@ -406,7 +416,7 @@ start_ollama_server() {
 }
 
 install_ollama() {
-  log_step "Installing Ollama..."
+  log_step "Installiere Ollama..."
 
   if command_exists ollama; then
     log_success "Ollama bereits installiert"
@@ -439,15 +449,17 @@ install_ollama() {
       exit 1
     fi
     log_success "Ollama via Homebrew installiert"
-    start_ollama_server
+    start_ollama_server || log_warn "Server-Start fehlgeschlagen - manuell starten: ollama serve"
   else
-    log_warn "Homebrew nicht gefunden"
-    echo ""
-    echo "Bitte Ollama manuell installieren:"
-    echo "  Option 1: Homebrew installieren, dann Script erneut ausführen"
-    echo "  Option 2: https://ollama.com/download"
-    echo ""
-    exit 1
+    log_warn "Homebrew nicht gefunden, verwende direkten Installer..."
+    if ! curl -fsSL "${OLLAMA_INSTALL_URL}" | sh; then
+      log_error "Ollama Installation fehlgeschlagen"
+      log_info "Manuelle Installation: https://ollama.com/download"
+      exit 1
+    fi
+    log_success "Ollama installiert (CLI-Version)"
+    log_info "Für die GUI-App: https://ollama.com/download"
+    start_ollama_server || log_warn "Server-Start fehlgeschlagen - manuell starten: ollama serve"
   fi
 
   wait_for_ollama || exit 1
@@ -458,7 +470,7 @@ install_ollama() {
 # ============================================================================
 
 pull_base_model() {
-  log_step "Downloading base model..."
+  log_step "Lade Basis-Modell herunter..."
   log_info "Prüfe Modell: ${MODEL_NAME}"
 
   if ollama_model_exists "${MODEL_NAME}"; then
@@ -467,16 +479,32 @@ pull_base_model() {
   fi
 
   log_info "Lade ${MODEL_NAME} (${MODEL_SIZE}, dauert mehrere Minuten je nach Verbindung)..."
-  if ! ollama pull "${MODEL_NAME}"; then
-    log_error "Modell-Download fehlgeschlagen"
+  log_info "Tipp: Bei Abbruch (Ctrl+C) setzt ein erneuter Start den Download fort"
+
+  local pull_success=false
+  for attempt in 1 2 3; do
+    if ollama pull "${MODEL_NAME}"; then
+      pull_success=true
+      break
+    fi
+    if [[ $attempt -lt 3 ]]; then
+      log_warn "Download fehlgeschlagen, Versuch $((attempt + 1))/3..."
+      sleep 3
+    fi
+  done
+
+  if ! $pull_success; then
+    log_error "Modell-Download fehlgeschlagen nach 3 Versuchen"
     log_info "Manuell versuchen: ollama pull ${MODEL_NAME}"
     exit 1
   fi
   log_success "Modell heruntergeladen: ${MODEL_NAME}"
 }
 
-create_custom_model() {
-  log_step "Creating custom model..."
+# Subshell function: isolates EXIT trap for temp file cleanup (no RETURN trap leak)
+create_custom_model() (
+  set -euo pipefail
+  log_step "Erstelle Custom-Modell..."
   log_info "Prüfe Custom-Modell: ${CUSTOM_MODEL_NAME}"
 
   if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
@@ -487,18 +515,19 @@ create_custom_model() {
   log_info "Erstelle optimiertes Custom-Modell..."
 
   # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
-  local script_dir external_modelfile=""
-  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+  local script_dir="" external_modelfile=""
+  if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || script_dir=""
+  fi
   local modelfile_name="${MODEL_NAME/:/-}-custom.modelfile"
   [[ -n "$script_dir" && -f "${script_dir}/ollama/${modelfile_name}" ]] && \
     external_modelfile="${script_dir}/ollama/${modelfile_name}"
 
   local modelfile
-  modelfile=$(mktemp -t hablara-modelfile.XXXXXX)
+  modelfile=$(mktemp "${TMPDIR:-/tmp}/hablara-modelfile.XXXXXX")
   chmod 600 "$modelfile"
-  # Cleanup on function exit (including Ctrl+C)
-  # ${modelfile:-} prevents "unbound variable" when RETURN trap leaks to caller
-  trap 'rm -f -- "${modelfile:-}"' RETURN
+  # Cleanup on subshell exit (EXIT trap is subshell-scoped, no leak to parent)
+  trap 'rm -f -- "$modelfile"' EXIT
 
   if [[ -n "$external_modelfile" ]]; then
     log_info "Verwende optimiertes Modelfile: ${modelfile_name}"
@@ -539,7 +568,7 @@ EOF
 
   log_success "Custom-Modell erstellt: ${CUSTOM_MODEL_NAME}"
   log_info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
-}
+)
 
 # ============================================================================
 # Verification
@@ -547,7 +576,7 @@ EOF
 
 verify_installation() {
   echo ""
-  log_step "Verifying installation..."
+  log_step "Überprüfe Installation..."
 
   command_exists ollama || { log_error "Ollama binary nicht gefunden"; return 1; }
   curl -sf "${OLLAMA_API_URL}/api/version" &> /dev/null || {
@@ -589,18 +618,21 @@ main() {
 
   echo -e "${COLOR_GREEN}========================================${COLOR_RESET}"
   echo ""
-  echo -e "${COLOR_BLUE}Next Steps:${COLOR_RESET}"
+  echo -e "${COLOR_BLUE}Nächste Schritte:${COLOR_RESET}"
   echo ""
   echo "   1. Starte Hablará.app"
   echo "   2. Drücke Ctrl+Shift+D für erste Aufnahme"
   echo "   3. Mikrofon-Berechtigung erlauben (einmalig)"
   echo ""
-  echo "LLM Settings in der App:"
+  local final_model="${MODEL_NAME}"
+  ollama_model_exists "${CUSTOM_MODEL_NAME}" && final_model="${CUSTOM_MODEL_NAME}"
+
+  echo "LLM-Einstellungen in der App:"
   echo "   - Provider: Ollama (Standard)"
-  echo "   - Modell: ${CUSTOM_MODEL_NAME}"
+  echo "   - Modell: ${final_model}"
   echo "   - Base URL: http://localhost:11434"
   echo ""
-  echo -e "${COLOR_CYAN}Docs: https://github.com/fidpa/hablara${COLOR_RESET}"
+  echo -e "${COLOR_CYAN}Dokumentation: https://github.com/fidpa/hablara${COLOR_RESET}"
   echo ""
 }
 

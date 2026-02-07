@@ -91,7 +91,7 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama (falls nicht vorhanden)
-2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
+2. **Modellauswahl:** 3b (schnelle Ergebnisse), 7b (gute Qualität, empfohlen), 14b (hohe Qualität), 32b (beste Qualität)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
 
@@ -145,7 +145,7 @@ curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ol
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama (falls nicht vorhanden)
-2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
+2. **Modellauswahl:** 3b (schnelle Ergebnisse), 7b (gute Qualität, empfohlen), 14b (hohe Qualität), 32b (beste Qualität)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
 
@@ -238,7 +238,7 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scr
 <summary>📋 Was macht dieser Befehl?</summary>
 
 1. Installiert Ollama via winget (falls nicht vorhanden)
-2. **Modellauswahl:** 3b (~2 GB), 7b (~4.7 GB, Standard), 14b (~9 GB), 32b (~20 GB)
+2. **Modellauswahl:** 3b (schnelle Ergebnisse), 7b (gute Qualität, empfohlen), 14b (hohe Qualität), 32b (beste Qualität)
 3. Erstellt optimiertes Custom-Modell
 4. Verifiziert Installation
 
@@ -441,7 +441,7 @@ Jetzt weiß ich, wie ich das angehen will."
 
 **Warum Qwen 2.5 als Modell?**
 - **Mehrsprachig trainiert:** Inkl. Deutsch
-- **4 Größen wählbar:** 3B (~2 GB, CPU-only), 7B (~4.7 GB, Standard), 14B (~9 GB), 32B (~20 GB)
+- **4 Größen wählbar:** 3B (schnelle Ergebnisse), 7B (gute Qualität, empfohlen), 14B (hohe Qualität), 32B (beste Qualität)
 - **JSON Compliance:** Zuverlässige strukturierte Outputs für unsere Prompt-Architektur
 - **Angepasstes Modelfile:** Reduzierter Context (8K statt 32K) für beschleunigte Inferenz, Temperature 0.3 für konsistente Outputs
 
@@ -566,10 +566,10 @@ ollama --version  # Falls installiert: Springe zu Schritt 2
 
 **Schritt 2: Basis-Modell herunterladen** (einmalig)
 ```bash
-# Standard (7B, ~4.7 GB - empfohlen)
+# Gute Qualität (7B, ~4.7 GB Download - empfohlen)
 ollama pull qwen2.5:7b
 
-# Oder: Lightweight (3B, ~2 GB - für CPU-only / wenig RAM)
+# Oder: Schnelle Ergebnisse (3B, ~2 GB Download - läuft auf jedem modernen Gerät)
 ollama pull qwen2.5:3b
 ```
 
@@ -631,7 +631,7 @@ Hablará unterstützt drei LLM-Anbieter:
 **Linux:** Ja, vollständig unterstützt (x64, Ubuntu 20.04+). Download: .deb, .rpm oder .AppImage im [GitHub Releases][releases].
 
 ### Wie groß ist das Ollama-Model?
-**~4.7 GB** (qwen2.5:7b, Standard). Weitere Varianten: 3b (~2 GB), 14b (~9 GB), 32b (~20 GB) - wählbar im Setup-Skript oder in den Einstellungen.
+**~4.7 GB** (qwen2.5:7b, empfohlen). Weitere Varianten: 3b (~2 GB), 14b (~9 GB), 32b (~20 GB) - wählbar im Setup-Skript oder in den Einstellungen.
 
 ### Wo speichert Hablará Daten?
 

@@ -80,12 +80,12 @@ export const LLM_MODELS = {
 // For backwards compatibility
 export const OLLAMA_MODELS = LLM_MODELS.ollama;
 
-/** Display labels for Ollama model dropdown (RAM, speed, use case) */
+/** Display labels for Ollama model dropdown */
 export const OLLAMA_MODEL_LABELS: Record<string, string> = {
-  "qwen2.5:3b-custom": "Qwen 2.5 3B (~4 GB RAM) – Lightweight / CPU-only",
-  "qwen2.5:7b-custom": "Qwen 2.5 7B (~7 GB RAM) – Standard (empfohlen)",
-  "qwen2.5:14b-custom": "Qwen 2.5 14B (~9 GB RAM) – Höhere Präzision",
-  "qwen2.5:32b-custom": "Qwen 2.5 32B (~20 GB RAM) – Maximale Qualität",
+  "qwen2.5:3b-custom": "Qwen 2.5 3B – Schnelle Ergebnisse, läuft auf jedem modernen Gerät",
+  "qwen2.5:7b-custom": "Qwen 2.5 7B – Gute Qualität, benötigt leistungsfähige Hardware (empfohlen)",
+  "qwen2.5:14b-custom": "Qwen 2.5 14B – Hohe Qualität, benötigt starke Hardware",
+  "qwen2.5:32b-custom": "Qwen 2.5 32B – Beste Qualität, benötigt sehr starke Hardware",
 };
 
 /**

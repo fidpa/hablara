@@ -27,7 +27,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 trap {
-    Write-Host "$([char]0x2717) Error: Setup failed unexpectedly: $_" -ForegroundColor Red
+    Write-Host "$([char]0x2717) Fehler: Setup fehlgeschlagen: $_" -ForegroundColor Red
     exit 1
 }
 
@@ -42,7 +42,7 @@ $MinOllamaVersion = '0.3.0'
 $script:ModelName = ''
 $script:CustomModelName = ''
 $script:ModelSize = ''
-$script:RequiredDiskSpaceGB = 10
+$script:RequiredDiskSpaceGB = 0
 
 $ModelConfigs = @{
     '3b'  = @{ Name = 'qwen2.5:3b';  Size = '~2GB';   DiskGB = 5;  RAMWarn = $false; MinRAM = 0 }
@@ -60,9 +60,20 @@ function Write-Step { param([string]$Message); Write-Host "`n==> " -ForegroundCo
 function Write-Info { param([string]$Message); Write-Host "    $([char]0x2022) " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
 function Write-Success { param([string]$Message); Write-Host "    $([char]0x2713) " -ForegroundColor Green -NoNewline; Write-Host $Message }
 function Write-Warn { param([string]$Message); Write-Host "    $([char]0x26A0) " -ForegroundColor Yellow -NoNewline; Write-Host $Message }
-function Write-Err { param([string]$Message); Write-Host "$([char]0x2717) Error: $Message" -ForegroundColor Red }
+function Write-Err { param([string]$Message); Write-Host "$([char]0x2717) Fehler: $Message" -ForegroundColor Red }
 
 function Test-CommandExists { param([string]$Command); $null -ne (Get-Command $Command -ErrorAction SilentlyContinue) }
+
+function Test-OllamaModelExists {
+    param([string]$Model)
+    if (-not (Test-CommandExists 'ollama')) { return $false }
+    $lines = & ollama list 2>$null
+    foreach ($line in $lines) {
+        $name = ($line -split '\s+')[0]
+        if ($name -eq $Model) { return $true }
+    }
+    return $false
+}
 
 function Test-InteractiveSession {
     try { return -not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected }
@@ -77,11 +88,13 @@ function Get-SystemRAMGB {
 }
 
 function Get-FreeDiskSpaceGB {
-    $ollamaPath = Join-Path $env:USERPROFILE '.ollama'
-    if (-not (Test-Path $ollamaPath)) { $ollamaPath = $env:USERPROFILE }
-    $drive = (Get-Item $ollamaPath).PSDrive.Name
-    $disk = Get-PSDrive -Name $drive
-    [math]::Floor($disk.Free / 1GB)
+    try {
+        $ollamaPath = Join-Path $env:USERPROFILE '.ollama'
+        if (-not (Test-Path $ollamaPath)) { $ollamaPath = $env:USERPROFILE }
+        $drive = (Get-Item $ollamaPath).PSDrive.Name
+        $disk = Get-PSDrive -Name $drive
+        [math]::Floor($disk.Free / 1GB)
+    } catch { return 0 }
 }
 
 function Compare-SemanticVersion {
@@ -117,7 +130,7 @@ function Test-OllamaVersion {
         if ($versionOutput -match '(\d+\.\d+\.?\d*)') {
             $currentVersion = $Matches[1]
             if ((Compare-SemanticVersion $currentVersion $MinOllamaVersion) -lt 0) {
-                Write-Warn "Ollama version $currentVersion is older than recommended $MinOllamaVersion"
+                Write-Warn "Ollama Version $currentVersion ist älter als empfohlen ($MinOllamaVersion)"
                 Write-Info "Update: winget upgrade Ollama.Ollama"
                 return $false
             }
@@ -128,28 +141,29 @@ function Test-OllamaVersion {
 
 function Test-ModelInference {
     param([string]$Model)
-    Write-Info "Testing model inference..."
+    Write-Info "Teste Model-Inference..."
 
     try {
-        $body = @{ model = $Model; prompt = "Say OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
+        $body = @{ model = $Model; prompt = "Sage OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
-        if ($response.response) { Write-Success "Model inference test passed"; return $true }
-    } catch { Write-Warn "Model inference test failed: $_" }
+        if ($response.response) { Write-Success "Model-Inference-Test erfolgreich"; return $true }
+    } catch { Write-Warn "Model-Inference-Test fehlgeschlagen: $_" }
     return $false
 }
 
 function Wait-OllamaServer {
-    param([int]$MaxAttempts = 30)
-    Write-Info "Waiting for Ollama server..."
+    param([int]$TimeoutSeconds = 30)
+    Write-Info "Warte auf Ollama Server..."
 
-    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
         try {
             $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 2 -ErrorAction Stop
-            Write-Success "Ollama server is ready"
+            Write-Success "Ollama Server ist bereit"
             return $true
         } catch { Start-Sleep -Seconds 1 }
     }
-    Write-Err "Ollama server not responding after $MaxAttempts seconds"
+    Write-Err "Ollama Server antwortet nicht nach ${TimeoutSeconds}s"
     return $false
 }
 
@@ -168,34 +182,34 @@ function Test-PortInUse {
 
 function Show-HelpMessage {
     @"
-Hablara Ollama Quick-Setup Script v$ScriptVersion
+Hablará Ollama Quick-Setup v$ScriptVersion
 
-Usage: .\setup-ollama-win.ps1 [-Model <variant>] [-Help]
+Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Help]
 
-Parameters:
-  -Model <variant>   Select model variant (3b, 7b, 14b, 32b)
-  -Help              Show this help message
+Parameter:
+  -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
+  -Help              Diese Hilfe anzeigen
 
-Model variants:
-  3b   - qwen2.5:3b   (~2GB download, 5GB disk)
-  7b   - qwen2.5:7b   (~4.7GB download, 10GB disk) [DEFAULT]
-  14b  - qwen2.5:14b  (~9GB download, 15GB disk)
-  32b  - qwen2.5:32b  (~20GB download, 25GB disk, needs 32GB+ RAM)
+Modell-Varianten:
+  3b   - qwen2.5:3b   Schnelle Ergebnisse, läuft auf jedem modernen Gerät
+  7b   - qwen2.5:7b   Gute Qualität, benötigt leistungsfähige Hardware [STANDARD]
+  14b  - qwen2.5:14b  Hohe Qualität, benötigt starke Hardware
+  32b  - qwen2.5:32b  Beste Qualität, benötigt sehr starke Hardware
 
-Examples:
-  .\setup-ollama-win.ps1              # Interactive or default (7b)
-  .\setup-ollama-win.ps1 -Model 3b    # Use 3b model
+Beispiele:
+  .\setup-ollama-win.ps1              # Interaktiv oder Standard (7b)
+  .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
 "@ | Write-Host
 }
 
 function Show-ModelMenu {
     Write-Host ""
-    Write-Host "Waehle ein Modell:" -ForegroundColor Cyan
+    Write-Host "Wähle ein Modell:" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  1) 3b  - qwen2.5:3b   (~2GB, schnell, weniger genau)"
-    Write-Host "  2) 7b  - qwen2.5:7b   (~4.7GB, ausgewogen) [EMPFOHLEN]"
-    Write-Host "  3) 14b - qwen2.5:14b  (~9GB, genauer)"
-    Write-Host "  4) 32b - qwen2.5:32b  (~20GB, beste Qualitaet, 32GB+ RAM)"
+    Write-Host "  1) 3b  - Schnelle Ergebnisse, läuft auf jedem modernen Gerät"
+    Write-Host "  2) 7b  - Gute Qualität, benötigt leistungsfähige Hardware [EMPFOHLEN]"
+    Write-Host "  3) 14b - Hohe Qualität, benötigt starke Hardware"
+    Write-Host "  4) 32b - Beste Qualität, benötigt sehr starke Hardware"
     Write-Host ""
     $choice = Read-Host "Auswahl [1-4, Enter=2]"
 
@@ -219,8 +233,8 @@ function Select-ModelConfig {
     }
 
     if (-not $ModelConfigs.ContainsKey($selectedModel)) {
-        Write-Err "Ungueltige Modell-Variante: $selectedModel"
-        Write-Host "Gueltige Varianten: 3b, 7b, 14b, 32b"
+        Write-Err "Ungültige Modell-Variante: $selectedModel"
+        Write-Host "Gültige Varianten: 3b, 7b, 14b, 32b"
         exit 1
     }
 
@@ -235,7 +249,7 @@ function Select-ModelConfig {
         $systemRAM = Get-SystemRAMGB
         if ($systemRAM -gt 0 -and $systemRAM -lt $config.MinRAM) {
             Write-Host ""
-            Write-Warn "Das 32b-Modell benoetigt mindestens $($config.MinRAM)GB RAM"
+            Write-Warn "Das 32b-Modell benötigt mindestens $($config.MinRAM)GB RAM"
             Write-Warn "Dein System hat nur ${systemRAM}GB RAM"
             Write-Host ""
 
@@ -249,7 +263,7 @@ function Select-ModelConfig {
     }
 
     if ([string]::IsNullOrEmpty($script:ModelName)) { Write-Err "Interner Fehler: ModelName nicht gesetzt"; exit 1 }
-    Write-Info "Ausgewaehltes Modell: $($script:ModelName)"
+    Write-Info "Ausgewähltes Modell: $($script:ModelName)"
     return $config
 }
 
@@ -260,36 +274,37 @@ function Select-ModelConfig {
 function Test-Prerequisites {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
-    Write-Host "  Hablara Ollama Quick-Setup v$ScriptVersion" -ForegroundColor Green
+    Write-Host "  Hablará Ollama Quick-Setup v$ScriptVersion" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
 
-    Write-Step "Running pre-flight checks..."
+    Write-Step "Führe Vorab-Prüfungen durch..."
 
-    if ($env:OS -ne 'Windows_NT') {
-        Write-Err "This script is for Windows only"
-        Write-Info "For macOS/Linux: ./scripts/setup-ollama-linux.sh"
+    if ([Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
+        Write-Err "Dieses Script ist nur für Windows"
+        Write-Info "Für macOS: scripts/setup-ollama-mac.sh"
+        Write-Info "Für Linux: scripts/setup-ollama-linux.sh"
         exit 4
     }
 
     $freeSpace = Get-FreeDiskSpaceGB
     if ($freeSpace -lt $RequiredDiskSpaceGB) {
-        Write-Err "Insufficient disk space: ${freeSpace}GB available, ${RequiredDiskSpaceGB}GB required"
+        Write-Err "Nicht genügend Speicher: ${freeSpace}GB verfügbar, ${RequiredDiskSpaceGB}GB benötigt"
         exit 2
     }
-    Write-Success "Disk space: ${freeSpace}GB available"
+    Write-Success "Speicherplatz: ${freeSpace}GB verfügbar"
 
     try {
         $null = Invoke-WebRequest -Uri 'https://ollama.com' -TimeoutSec 5 -UseBasicParsing
-        Write-Success "Network connection OK"
+        Write-Success "Netzwerkverbindung OK"
     } catch {
-        Write-Err "No network connection to ollama.com"
+        Write-Err "Keine Netzwerkverbindung zu ollama.com"
         exit 3
     }
 
     $gpu = Test-GpuAvailable
-    if ($gpu.Available) { Write-Success "GPU detected: $($gpu.Type)" }
-    else { Write-Warn "No GPU detected - using CPU (slower inference)" }
+    if ($gpu.Available) { Write-Success "GPU erkannt: $($gpu.Type)" }
+    else { Write-Warn "Keine GPU erkannt - CPU-Inferenz (langsamer)" }
 
     Write-Host ""
 }
@@ -301,63 +316,66 @@ function Test-Prerequisites {
 function Start-OllamaServer {
     try {
         $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
-        Write-Success "Ollama server already running (v$($response.version))"
+        Write-Success "Ollama Server läuft bereits (v$($response.version))"
         return $true
     } catch {}
 
-    # Port might be in use by starting server
+    # Port might be in use by starting server - delegate to Wait-OllamaServer (30s)
     if (Test-PortInUse -Port 11434) {
-        Write-Info "Port 11434 is in use, waiting for Ollama API..."
-        for ($i = 1; $i -le 10; $i++) {
-            Start-Sleep -Seconds 1
-            try {
-                $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 3 -ErrorAction Stop
-                Write-Success "Ollama server is running (v$($response.version))"
-                return $true
-            } catch {}
-        }
-        Write-Warn "Port 11434 is in use but not responding as Ollama API"
+        Write-Info "Port 11434 ist belegt, warte auf Ollama API..."
+        if (Wait-OllamaServer) { return $true }
+        Write-Warn "Port 11434 belegt, aber Ollama API antwortet nicht"
         return $false
     }
 
+    # Try Ollama app (winget/installer installs "ollama app.exe" in LOCALAPPDATA)
+    $ollamaApp = Join-Path $env:LOCALAPPDATA 'Ollama\ollama app.exe'
+    if (Test-Path $ollamaApp) {
+        Write-Info "Starte Ollama App..."
+        Start-Process -FilePath $ollamaApp -WindowStyle Hidden
+        $serverReady = Wait-OllamaServer
+        if ($serverReady) { return $true }
+    }
+
+    # Fallback: ollama serve
     if (Test-CommandExists 'ollama') {
-        Write-Info "Starting Ollama server..."
+        Write-Info "Starte Ollama Server (ollama serve)..."
         $process = Start-Process -FilePath 'ollama' -ArgumentList 'serve' -WindowStyle Hidden -PassThru
         $serverReady = Wait-OllamaServer
 
         if ($serverReady -and -not $process.HasExited) { return $true }
-        if ($process.HasExited) { Write-Err "Ollama process exited (code: $($process.ExitCode))"; return $false }
+        if ($process.HasExited) { Write-Err "Ollama Prozess beendet (Code: $($process.ExitCode))"; return $false }
         return $serverReady
     }
     return $false
 }
 
 function Install-Ollama {
-    Write-Step "Installing Ollama..."
+    Write-Step "Installiere Ollama..."
 
     if (Test-CommandExists 'ollama') {
-        Write-Success "Ollama already installed"
+        Write-Success "Ollama bereits installiert"
         $version = & ollama --version 2>&1 | Select-Object -First 1
         Write-Info "Version: $version"
         Test-OllamaVersion | Out-Null
 
         if (-not (Start-OllamaServer)) {
-            Write-Err "Could not connect to Ollama server"
-            Write-Info "Start manually: ollama serve"
+            Write-Err "Konnte Ollama Server nicht starten"
+            Write-Info "Manuell starten: ollama serve"
             exit 1
         }
         return
     }
 
-    Write-Info "Installing Ollama..."
+    Write-Info "Installiere Ollama..."
 
     if (Test-CommandExists 'winget') {
-        Write-Info "Using winget..."
+        Write-Info "Verwende winget..."
         try {
             & winget install Ollama.Ollama --silent --accept-source-agreements --accept-package-agreements
             if ($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 3010) {
-                Write-Success "Ollama installed via winget"
-                if ($LASTEXITCODE -eq 3010) { Write-Warn "A reboot may be required" }
+                Write-Success "Ollama via winget installiert"
+                if ($LASTEXITCODE -eq 3010) { Write-Warn "Ein Neustart kann erforderlich sein" }
 
                 $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
 
@@ -367,16 +385,19 @@ function Install-Ollama {
                     }
                 }
 
-                Start-OllamaServer
+                if (-not (Start-OllamaServer)) {
+                    Write-Warn "Server-Start fehlgeschlagen - manuell starten: ollama serve"
+                }
+                if (-not (Wait-OllamaServer)) { exit 1 }
                 return
             }
-        } catch { Write-Warn "winget installation failed: $_" }
+        } catch { Write-Warn "winget Installation fehlgeschlagen: $_" }
     }
 
-    Write-Warn "Automatic installation not available"
+    Write-Warn "Automatische Installation nicht verfügbar"
     Write-Host ""
-    Write-Host "Please install Ollama manually: https://ollama.com/download" -ForegroundColor Cyan
-    Write-Host "Then run this script again."
+    Write-Host "Bitte Ollama manuell installieren: https://ollama.com/download" -ForegroundColor Cyan
+    Write-Host "Danach dieses Script erneut ausführen."
     Write-Host ""
     exit 1
 }
@@ -386,49 +407,62 @@ function Install-Ollama {
 # ============================================================================
 
 function Install-BaseModel {
-    Write-Step "Downloading base model..."
-    Write-Info "Checking model: $ModelName"
+    Write-Step "Lade Basis-Modell herunter..."
+    Write-Info "Prüfe Modell: $ModelName"
 
-    $models = & ollama list 2>$null
-    $escapedModelName = [regex]::Escape($ModelName)
-    if ($models -match "^$escapedModelName\s") {
-        Write-Success "Model already available: $ModelName"
+    if (Test-OllamaModelExists $ModelName) {
+        Write-Success "Modell bereits vorhanden: $ModelName"
         return
     }
 
-    Write-Info "Downloading $ModelName ($ModelSize, takes several minutes depending on connection)..."
-    & ollama pull $ModelName
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "Model download failed"
-        Write-Info "Try manually: ollama pull $ModelName"
+    Write-Info "Lade $ModelName ($ModelSize, dauert mehrere Minuten je nach Verbindung)..."
+    Write-Info "Tipp: Bei Abbruch (Ctrl+C) setzt ein erneuter Start den Download fort"
+
+    $pullSuccess = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        & ollama pull $ModelName
+        if ($LASTEXITCODE -eq 0) { $pullSuccess = $true; break }
+        if ($attempt -lt 3) {
+            Write-Warn "Download fehlgeschlagen, Versuch $($attempt + 1)/3..."
+            Start-Sleep -Seconds 3
+        }
+    }
+
+    if (-not $pullSuccess) {
+        Write-Err "Modell-Download fehlgeschlagen nach 3 Versuchen"
+        Write-Info "Manuell versuchen: ollama pull $ModelName"
         exit 1
     }
-    Write-Success "Model downloaded: $ModelName"
+    Write-Success "Modell heruntergeladen: $ModelName"
 }
 
 function New-CustomModel {
-    Write-Step "Creating custom model..."
-    Write-Info "Checking custom model: $CustomModelName"
+    Write-Step "Erstelle Custom-Modell..."
+    Write-Info "Prüfe Custom-Modell: $CustomModelName"
 
-    $models = & ollama list 2>$null
-    $escapedCustomModelName = [regex]::Escape($CustomModelName)
-    if ($models -match "^$escapedCustomModelName\s") {
-        Write-Success "Custom model already available"
+    if (Test-OllamaModelExists $CustomModelName) {
+        Write-Success "Custom-Modell bereits vorhanden"
         return
     }
 
-    Write-Info "Creating optimized custom model..."
+    Write-Info "Erstelle optimiertes Custom-Modell..."
 
     # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
     $modelfileName = ($ModelName -replace ':', '-') + "-custom.modelfile"
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path 2>$null
+    $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
     $externalModelfile = if ($scriptDir) { Join-Path $scriptDir "ollama\$modelfileName" } else { "" }
 
     $modelfileContent = ""
     if ($externalModelfile -and (Test-Path $externalModelfile)) {
-        Write-Info "Verwende optimiertes Modelfile: $modelfileName"
-        $modelfileContent = [System.IO.File]::ReadAllText($externalModelfile)
-    } else {
+        try {
+            $modelfileContent = [System.IO.File]::ReadAllText($externalModelfile)
+            Write-Info "Verwende optimiertes Modelfile: $modelfileName"
+        } catch {
+            Write-Warn "Konnte Modelfile nicht lesen, verwende generisches: $_"
+            $externalModelfile = ""
+        }
+    }
+    if (-not $modelfileContent) {
         Write-Info "Kein spezifisches Modelfile gefunden, verwende generisches"
         $modelfileContent = @"
 FROM $ModelName
@@ -456,11 +490,11 @@ Wichtig:
 
     $modelfilePath = Join-Path $env:TEMP "hablara-modelfile-$(Get-Random).tmp"
 
-    # Path traversal prevention
+    # Path traversal prevention (case-insensitive, trailing backslash prevents C:\Temp vs C:\Temp2)
     $canonicalPath = [System.IO.Path]::GetFullPath($modelfilePath)
-    $canonicalTemp = [System.IO.Path]::GetFullPath($env:TEMP)
-    if (-not $canonicalPath.StartsWith($canonicalTemp)) {
-        Write-Err "Path traversal detected"
+    $canonicalTemp = [System.IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+    if (-not $canonicalPath.StartsWith($canonicalTemp, [StringComparison]::OrdinalIgnoreCase)) {
+        Write-Err "Path-Traversal erkannt"
         return
     }
 
@@ -476,16 +510,16 @@ Wichtig:
         $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($currentUser, 'FullControl', 'Allow')
         $acl.AddAccessRule($rule)
         Set-Acl -Path $modelfilePath -AclObject $acl -ErrorAction Stop
-    } catch { Write-Warn "Could not set restrictive permissions: $_" }
+    } catch { Write-Warn "Konnte restriktive Berechtigungen nicht setzen: $_" }
 
     try {
         & ollama create $CustomModelName -f $modelfilePath
         if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Custom model creation failed - using base model"
+            Write-Warn "Custom-Modell Erstellung fehlgeschlagen - verwende Basis-Modell"
             return
         }
-        Write-Success "Custom model created: $CustomModelName"
-        Write-Info "Accuracy boost: 80% -> 93% (Emotion Detection)"
+        Write-Success "Custom-Modell erstellt: $CustomModelName"
+        Write-Info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
     } finally {
         if (Test-Path $modelfilePath) { Remove-Item -Path $modelfilePath -Force -ErrorAction SilentlyContinue }
     }
@@ -497,34 +531,30 @@ Wichtig:
 
 function Test-Installation {
     Write-Host ""
-    Write-Step "Verifying installation..."
+    Write-Step "Überprüfe Installation..."
 
-    if (-not (Test-CommandExists 'ollama')) { Write-Err "Ollama binary not found"; return $false }
+    if (-not (Test-CommandExists 'ollama')) { Write-Err "Ollama Binary nicht gefunden"; return $false }
 
     try { $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 }
-    catch { Write-Err "Ollama server not reachable"; return $false }
+    catch { Write-Err "Ollama Server nicht erreichbar"; return $false }
 
-    $models = & ollama list 2>$null
-    $escapedModelName = [regex]::Escape($ModelName)
-    $escapedCustomModelName = [regex]::Escape($CustomModelName)
-
-    if (-not ($models -match "^$escapedModelName\s")) { Write-Err "Base model not found: $ModelName"; return $false }
-    Write-Success "Base model available: $ModelName"
+    if (-not (Test-OllamaModelExists $ModelName)) { Write-Err "Basis-Modell nicht gefunden: $ModelName"; return $false }
+    Write-Success "Basis-Modell verfügbar: $ModelName"
 
     $testModel = $ModelName
-    if ($models -match "^$escapedCustomModelName\s") {
-        Write-Success "Custom model available: $CustomModelName"
+    if (Test-OllamaModelExists $CustomModelName) {
+        Write-Success "Custom-Modell verfügbar: $CustomModelName"
         $testModel = $CustomModelName
     } else {
-        Write-Warn "Custom model not available (using base model)"
+        Write-Warn "Custom-Modell nicht verfügbar (verwende Basis-Modell)"
     }
 
     if (-not (Test-ModelInference -Model $testModel)) {
-        Write-Warn "Inference test failed - try in the app"
+        Write-Warn "Inference-Test fehlgeschlagen - teste in der App"
     }
 
     Write-Host ""
-    Write-Success "Setup complete!"
+    Write-Success "Setup abgeschlossen!"
     return $true
 }
 
@@ -543,18 +573,20 @@ function Main {
 
     Write-Host "========================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Next Steps:" -ForegroundColor Blue
+    Write-Host "Nächste Schritte:" -ForegroundColor Blue
     Write-Host ""
-    Write-Host "  1. Start Hablara.exe"
-    Write-Host "  2. Press Ctrl+Shift+D for first recording"
-    Write-Host "  3. Allow microphone permission (one-time)"
+    Write-Host "  1. Starte Hablará"
+    Write-Host "  2. Drücke Ctrl+Shift+D für erste Aufnahme"
+    Write-Host "  3. Mikrofon-Berechtigung erlauben (einmalig)"
     Write-Host ""
-    Write-Host "LLM Settings in the app:" -ForegroundColor Yellow
-    Write-Host "  - Provider: Ollama (default)"
-    Write-Host "  - Model: $CustomModelName"
+    $finalModel = if (Test-OllamaModelExists $CustomModelName) { $CustomModelName } else { $ModelName }
+
+    Write-Host "LLM-Einstellungen in der App:" -ForegroundColor Yellow
+    Write-Host "  - Provider: Ollama (Standard)"
+    Write-Host "  - Modell: $finalModel"
     Write-Host "  - Base URL: http://localhost:11434"
     Write-Host ""
-    Write-Host "Docs: https://github.com/fidpa/hablara" -ForegroundColor Cyan
+    Write-Host "Dokumentation: https://github.com/fidpa/hablara" -ForegroundColor Cyan
     Write-Host ""
 }
 
