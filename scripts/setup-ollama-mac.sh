@@ -4,11 +4,13 @@
 #
 # Usage: curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-mac.sh | bash
 #        ./setup-ollama-mac.sh --model 3b
+#        ./setup-ollama-mac.sh --diagnose
 #
 # Exit codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
 
 set -euo pipefail
 IFS=$'\n\t'
+export LC_NUMERIC=C
 
 # ============================================================================
 # Configuration
@@ -27,6 +29,7 @@ RAM_WARNING=""
 FORCE_UPDATE=false
 STATUS_CHECK_MODE=false
 CLEANUP_MODE=false
+DIAGNOSE_MODE=false
 
 # Model config lookup (Bash 3.2 compatible - no associative arrays)
 # Returns: model_name|download_size|disk_gb|ram_warning_gb
@@ -169,11 +172,13 @@ check_gpu_available() {
 }
 
 # Silent inference check: returns 0 if model responds, 1 otherwise (no log output)
+# Usage: _check_model_responds "model_name" [timeout_seconds]
 _check_model_responds() {
   local model="$1"
+  local timeout="${2:-60}"
   local escaped_model response
   escaped_model=$(json_escape_string "$model")
-  response=$(curl -sf --max-time 60 "${OLLAMA_API_URL}/api/generate" \
+  response=$(curl -sf --max-time "$timeout" "${OLLAMA_API_URL}/api/generate" \
     -H "Content-Type: application/json" \
     -d "{\"model\": \"${escaped_model}\", \"prompt\": \"Sage OK\", \"stream\": false, \"options\": {\"num_predict\": 5}}" \
     2>/dev/null) || true
@@ -210,7 +215,7 @@ wait_for_ollama() {
 
 cleanup() {
   local exit_code=$?
-  if [[ $exit_code -ne 0 && "$STATUS_CHECK_MODE" == "false" && "$CLEANUP_MODE" == "false" ]]; then
+  if [[ $exit_code -ne 0 && "$STATUS_CHECK_MODE" == "false" && "$CLEANUP_MODE" == "false" && "$DIAGNOSE_MODE" == "false" ]]; then
     log_error "Setup fehlgeschlagen"
   fi
 }
@@ -370,6 +375,179 @@ run_status_check() {
 }
 
 # ============================================================================
+# Diagnose Report
+# ============================================================================
+
+run_diagnose_report() {
+  DIAGNOSE_MODE=true
+  STATUS_CHECK_MODE=true  # Suppress EXIT trap error message
+
+  # --- System ---
+  local os_version arch ram_total_gb ram_free_gb free_disk_gb shell_version
+
+  os_version=$(sw_vers -productName 2>/dev/null || echo "macOS")
+  os_version="${os_version} $(sw_vers -productVersion 2>/dev/null || echo "unbekannt")"
+  arch=$(uname -m 2>/dev/null || echo "unbekannt")
+
+  local mem_bytes
+  mem_bytes=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
+  if [[ "$mem_bytes" =~ ^[0-9]+$ && "$mem_bytes" -gt 0 ]]; then
+    ram_total_gb=$(( mem_bytes / 1024 / 1024 / 1024 ))
+  else
+    ram_total_gb="unbekannt"
+  fi
+
+  # Free RAM via vm_stat: free + inactive + purgeable (macOS keeps "Pages free" near 0)
+  local page_size vm_out free_p inactive_p purgeable_p avail_pages
+  page_size=$(sysctl -n hw.pagesize 2>/dev/null || echo "4096")
+  vm_out=$(vm_stat 2>/dev/null || true)
+  free_p=$(echo "$vm_out" | awk '/Pages free/ {gsub(/\./,"",$3); print $3}' || echo "0")
+  inactive_p=$(echo "$vm_out" | awk '/Pages inactive/ {gsub(/\./,"",$3); print $3}' || echo "0")
+  purgeable_p=$(echo "$vm_out" | awk '/Pages purgeable/ {gsub(/\./,"",$3); print $3}' || echo "0")
+  [[ ! "$free_p" =~ ^[0-9]+$ ]] && free_p=0
+  [[ ! "$inactive_p" =~ ^[0-9]+$ ]] && inactive_p=0
+  [[ ! "$purgeable_p" =~ ^[0-9]+$ ]] && purgeable_p=0
+  avail_pages=$(( free_p + inactive_p + purgeable_p ))
+  if [[ "$avail_pages" -gt 0 ]]; then
+    ram_free_gb=$(( avail_pages * page_size / 1024 / 1024 / 1024 ))
+  else
+    ram_free_gb="unbekannt"
+  fi
+
+  free_disk_gb=$(df -g / 2>/dev/null | tail -1 | awk '{print $4}' || echo "unbekannt")
+  [[ ! "$free_disk_gb" =~ ^[0-9]+$ ]] && free_disk_gb="unbekannt"
+
+  shell_version="${BASH_VERSION:-unbekannt}"
+
+  # --- Ollama ---
+  local ollama_version="nicht installiert"
+  local server_status="nicht erreichbar"
+  local gpu_label="unbekannt"
+
+  if command_exists ollama; then
+    ollama_version=$(get_ollama_version_string)
+  fi
+
+  if curl -sf --max-time 5 "${OLLAMA_API_URL}/api/version" &> /dev/null; then
+    server_status="läuft"
+  fi
+
+  local gpu_type
+  gpu_type=$(check_gpu_available) || true
+  case "$gpu_type" in
+    apple_silicon) gpu_label="Apple Silicon (Metal)" ;;
+    nvidia)        gpu_label="NVIDIA (CUDA)" ;;
+    *)             gpu_label="Keine" ;;
+  esac
+
+  # --- Models ---
+  local models_output=""
+  local total_storage_gb=0
+  if command_exists ollama && ollama list &>/dev/null; then
+    local ollama_list
+    ollama_list=$(ollama list 2>/dev/null) || true
+
+    local variant
+    for variant in 32b 14b 7b 3b; do
+      local config_line
+      config_line=$(get_model_config "$variant") || continue
+      local model_name="${config_line%%|*}"
+
+      # Check base model
+      if ollama_model_exists "$model_name"; then
+        local size_str
+        size_str=$(echo "$ollama_list" | awk -v m="$model_name" '$1 == m {print $3, $4}')
+        local size_display="${size_str:-unbekannt}"
+        local pad=$(( 20 - ${#model_name} )); [[ $pad -lt 1 ]] && pad=1
+        models_output="${models_output}    ${model_name}$(printf '%*s' "$pad" '')${size_display}  ✓"$'\n'
+        # Accumulate storage
+        if [[ "$size_str" =~ ([0-9.]+)[[:space:]]*([KMGT]?B) ]]; then
+          local val="${BASH_REMATCH[1]}" unit="${BASH_REMATCH[2]}"
+          case "$unit" in
+            GB) total_storage_gb=$(awk "BEGIN {printf \"%.1f\", $total_storage_gb + $val}") ;;
+            MB) total_storage_gb=$(awk "BEGIN {printf \"%.1f\", $total_storage_gb + $val / 1024}") ;;
+          esac
+        fi
+      fi
+
+      # Check custom model
+      local custom_name="${model_name}-custom"
+      if ollama_model_exists "$custom_name"; then
+        local size_str
+        size_str=$(echo "$ollama_list" | awk -v m="$custom_name" '$1 == m {print $3, $4}')
+        local size_display="${size_str:-unbekannt}"
+        # Check inference for custom model
+        local responds_label=""
+        if [[ "$server_status" == "läuft" ]] && _check_model_responds "$custom_name" 15; then
+          responds_label=" (antwortet)"
+        fi
+        local pad=$(( 20 - ${#custom_name} )); [[ $pad -lt 1 ]] && pad=1
+        models_output="${models_output}    ${custom_name}$(printf '%*s' "$pad" '')${size_display}  ✓${responds_label}"$'\n'
+        if [[ "$size_str" =~ ([0-9.]+)[[:space:]]*([KMGT]?B) ]]; then
+          local val="${BASH_REMATCH[1]}" unit="${BASH_REMATCH[2]}"
+          case "$unit" in
+            GB) total_storage_gb=$(awk "BEGIN {printf \"%.1f\", $total_storage_gb + $val}") ;;
+            MB) total_storage_gb=$(awk "BEGIN {printf \"%.1f\", $total_storage_gb + $val / 1024}") ;;
+          esac
+        fi
+      fi
+    done
+  fi
+
+  if [[ -z "$models_output" ]]; then
+    models_output="    [keine Hablará-Modelle gefunden]"$'\n'
+  fi
+
+  # --- Ollama Log ---
+  local log_output=""
+  local log_file="${HOME}/.ollama/logs/server.log"
+  if [[ -r "$log_file" ]]; then
+    local error_lines
+    error_lines=$(tail -200 "$log_file" 2>/dev/null | grep -iE 'ERROR|WARN|fatal' | tail -10 || true)
+    if [[ -n "$error_lines" ]]; then
+      log_output="$error_lines"
+    else
+      log_output="    [keine Fehler gefunden]"
+    fi
+  else
+    log_output="    [Log-Datei nicht gefunden: ${log_file}]"
+  fi
+
+  # --- Output (plain text, no ANSI colors) ---
+  local timestamp
+  timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+  cat <<EOF
+
+=== Hablará Diagnose-Report ===
+
+System:
+  OS:           ${os_version} (${arch})
+  RAM:          ${ram_total_gb} GB (${ram_free_gb} GB verfügbar)
+  Speicher:     ${free_disk_gb} GB frei
+  Shell:        bash ${shell_version}
+
+Ollama:
+  Version:      ${ollama_version}
+  Server:       ${server_status}
+  API-URL:      ${OLLAMA_API_URL}
+  GPU:          ${gpu_label}
+
+Hablará-Modelle:
+${models_output}
+Speicher (Hablará):  ~${total_storage_gb} GB
+
+Ollama-Log (letzte Fehler):
+${log_output}
+
+---
+Erstellt: ${timestamp}
+Script:   setup-ollama-mac.sh v${SCRIPT_VERSION}
+
+EOF
+}
+
+# ============================================================================
 # Cleanup
 # ============================================================================
 
@@ -501,6 +679,7 @@ Optionen:
   -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
   --update              Hablará-Modell aktualisieren
   --status              Ollama-Installation prüfen (Health-Check)
+  --diagnose            Support-Report für GitHub Issues generieren
   --cleanup             Hablará-Modelle aufräumen (nur interaktiv)
   -h, --help            Diese Hilfe anzeigen
 
@@ -515,6 +694,7 @@ Beispiele:
   $0 --model 3b         # 3b-Modell verwenden
   $0 --update           # Hablará-Modell aktualisieren
   $0 --status           # Installation prüfen
+  $0 --diagnose         # Support-Report generieren
   $0 --cleanup          # Hablará-Modelle aufräumen
   curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
   curl -fsSL URL | bash -s -- --update  # Update via Pipe
@@ -563,15 +743,17 @@ show_main_menu() {
   echo "" >&2
   echo "  1) Ollama einrichten oder aktualisieren" >&2
   echo "  2) Status prüfen" >&2
-  echo "  3) Modelle aufräumen" >&2
+  echo "  3) Diagnose (Support-Report)" >&2
+  echo "  4) Modelle aufräumen" >&2
   echo "" >&2
-  echo -n "Auswahl [1-3, Enter=1]: " >&2
+  echo -n "Auswahl [1-4, Enter=1]: " >&2
 
   local choice
   read -r choice </dev/tty || choice=""
   case "$choice" in
     2) echo "status" ;;
-    3) echo "cleanup" ;;
+    3) echo "diagnose" ;;
+    4) echo "cleanup" ;;
     *) echo "setup" ;;
   esac
 }
@@ -587,6 +769,7 @@ select_model() {
         requested_model="$2"; has_explicit_flags=true; shift 2 ;;
       --update) FORCE_UPDATE=true; has_explicit_flags=true; shift ;;
       --status) local _rc=0; run_status_check || _rc=$?; exit $_rc ;;
+      --diagnose) run_diagnose_report; exit 0 ;;
       --cleanup) run_cleanup; exit $? ;;
       -h|--help) show_help; exit 0 ;;
       *) log_error "Unbekannte Option: $1"; exit 1 ;;
@@ -599,6 +782,8 @@ select_model() {
     action=$(show_main_menu) || action="setup"
     if [[ "$action" == "status" ]]; then
       local _rc=0; run_status_check || _rc=$?; exit $_rc
+    elif [[ "$action" == "diagnose" ]]; then
+      run_diagnose_report; exit 0
     elif [[ "$action" == "cleanup" ]]; then
       run_cleanup; exit $?
     fi

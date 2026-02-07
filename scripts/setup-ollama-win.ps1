@@ -11,6 +11,7 @@
     .\setup-ollama-win.ps1 -Model 3b
     .\setup-ollama-win.ps1 -Update
     .\setup-ollama-win.ps1 -Status
+    .\setup-ollama-win.ps1 -Diagnose
     .\setup-ollama-win.ps1 -Cleanup
 
 .NOTES
@@ -26,6 +27,8 @@ param(
     [switch]$Update,
 
     [switch]$Status,
+
+    [switch]$Diagnose,
 
     [switch]$Cleanup,
 
@@ -161,10 +164,10 @@ function Test-OllamaVersion {
 
 # Silent inference check: returns $true if model responds, $false otherwise (no log output)
 function Test-ModelResponds {
-    param([string]$Model)
+    param([string]$Model, [int]$TimeoutSec = 60)
     try {
         $body = @{ model = $Model; prompt = "Sage OK"; stream = $false; options = @{ num_predict = 5 } } | ConvertTo-Json
-        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec 60
+        $response = Invoke-RestMethod -Uri "$OllamaApiUrl/api/generate" -Method Post -Body $body -ContentType 'application/json' -TimeoutSec $TimeoutSec
         if ($response.response) { return $true }
     } catch {}
     return $false
@@ -320,7 +323,7 @@ function Invoke-StatusCheck {
             foreach ($m in $allModels) {
                 $line = $ollamaList | Where-Object { $_ -match "^$([regex]::Escape($m))\s" } | Select-Object -First 1
                 if ($line -and $line -match '(\d+\.?\d*)\s*(KB|MB|GB|TB)') {
-                    $val = [double]$Matches[1]
+                    $val = [double]::Parse($Matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
                     switch ($Matches[2]) {
                         'TB' { $totalGB += $val * 1024 }
                         'GB' { $totalGB += $val }
@@ -347,6 +350,175 @@ function Invoke-StatusCheck {
     Write-Host ""
 
     return [math]::Min($errors, 1)
+}
+
+# ============================================================================
+# Diagnose Report
+# ============================================================================
+
+function Invoke-DiagnoseReport {
+    # --- System ---
+    $osInfo = [System.Environment]::OSVersion
+    $osVersion = "Windows $($osInfo.Version.Major).$($osInfo.Version.Minor)"
+    try {
+        $wmiOs = Get-CimInstance -ClassName Win32_OperatingSystem -Property Caption -ErrorAction Stop
+        $osVersion = $wmiOs.Caption -replace 'Microsoft\s+', ''
+    } catch {}
+    $arch = $env:PROCESSOR_ARCHITECTURE
+
+    $ramTotalGB = 'unbekannt'
+    $ramFreeGB = 'unbekannt'
+    try {
+        $compSys = Get-CimInstance -ClassName Win32_ComputerSystem -Property TotalPhysicalMemory -ErrorAction Stop
+        $ramTotalGB = [math]::Floor($compSys.TotalPhysicalMemory / 1GB)
+    } catch {}
+    try {
+        # FreePhysicalMemory is in KB (not bytes!) — dividing KB by 1MB (1048576) gives GB
+        $osObj = Get-CimInstance -ClassName Win32_OperatingSystem -Property FreePhysicalMemory -ErrorAction Stop
+        $ramFreeGB = [math]::Floor($osObj.FreePhysicalMemory / 1MB)
+    } catch {}
+
+    $freeDiskGB = 'unbekannt'
+    try {
+        $drive = (Get-PSDrive -Name C -ErrorAction Stop)
+        $freeDiskGB = [math]::Floor($drive.Free / 1GB)
+    } catch {}
+
+    $shellVersion = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor)"
+
+    # --- Ollama ---
+    $ollamaVersion = 'nicht installiert'
+    $serverStatus = 'nicht erreichbar'
+    $gpuLabel = 'unbekannt'
+
+    if (Test-CommandExists 'ollama') {
+        $ollamaVersion = Get-OllamaVersionString
+    }
+
+    try {
+        $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 -ErrorAction Stop
+        $serverStatus = 'läuft'
+    } catch {}
+
+    $gpu = Test-GpuAvailable
+    if ($gpu.Available) {
+        $gpuLabel = switch ($gpu.Type) {
+            'NVIDIA'   { 'NVIDIA (CUDA)' }
+            'AMD ROCm' { 'AMD (ROCm)' }
+            default     { $gpu.Type }
+        }
+    } else {
+        $gpuLabel = 'Keine'
+    }
+
+    # --- Models ---
+    $modelsOutput = ''
+    $totalStorageGB = 0.0
+    $ollamaAvailable = (Test-CommandExists 'ollama')
+    $ollamaList = $null
+    if ($ollamaAvailable) {
+        try { $ollamaList = & ollama list 2>$null } catch {}
+    }
+
+    if ($ollamaAvailable -and $ollamaList) {
+        foreach ($variant in @('32b', '14b', '7b', '3b')) {
+            $modelName = $ModelConfigs[$variant].Name
+            $customName = "${modelName}-custom"
+
+            # Check base model
+            if (Test-OllamaModelExists $modelName) {
+                $line = $ollamaList | Where-Object { $_ -match "^$([regex]::Escape($modelName))\s" } | Select-Object -First 1
+                $sizeDisplay = 'unbekannt'
+                if ($line -and $line -match '(\d+\.?\d*)\s*(KB|MB|GB|TB)') {
+                    $sizeDisplay = "$($Matches[1]) $($Matches[2])"
+                    $val = [double]::Parse($Matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                    switch ($Matches[2]) {
+                        'GB' { $totalStorageGB += $val }
+                        'MB' { $totalStorageGB += $val / 1024 }
+                    }
+                }
+                $padding = ' ' * [math]::Max(1, 20 - $modelName.Length)
+                $modelsOutput += "    ${modelName}${padding}${sizeDisplay}  $([char]0x2713)`n"
+            }
+
+            # Check custom model
+            if (Test-OllamaModelExists $customName) {
+                $line = $ollamaList | Where-Object { $_ -match "^$([regex]::Escape($customName))\s" } | Select-Object -First 1
+                $sizeDisplay = 'unbekannt'
+                if ($line -and $line -match '(\d+\.?\d*)\s*(KB|MB|GB|TB)') {
+                    $sizeDisplay = "$($Matches[1]) $($Matches[2])"
+                    $val = [double]::Parse($Matches[1], [System.Globalization.CultureInfo]::InvariantCulture)
+                    switch ($Matches[2]) {
+                        'GB' { $totalStorageGB += $val }
+                        'MB' { $totalStorageGB += $val / 1024 }
+                    }
+                }
+                $respondsLabel = ''
+                if ($serverStatus -eq 'läuft' -and (Test-ModelResponds -Model $customName -TimeoutSec 15)) {
+                    $respondsLabel = ' (antwortet)'
+                }
+                $padding = ' ' * [math]::Max(1, 20 - $customName.Length)
+                $modelsOutput += "    ${customName}${padding}${sizeDisplay}  $([char]0x2713)${respondsLabel}`n"
+            }
+        }
+    }
+
+    if ([string]::IsNullOrEmpty($modelsOutput)) {
+        $modelsOutput = "    [keine Hablará-Modelle gefunden]`n"
+    }
+
+    $totalStorageGB = [math]::Round($totalStorageGB, 1)
+
+    # --- Ollama Log ---
+    $logOutput = ''
+    $logFile = Join-Path $env:USERPROFILE '.ollama\logs\server.log'
+    if (Test-Path $logFile) {
+        try {
+            $logLines = Get-Content -Path $logFile -Tail 200 -ErrorAction Stop
+            $errorLines = $logLines | Where-Object { $_ -match 'ERROR|WARN|fatal' } | Select-Object -Last 10
+            if ($errorLines) {
+                $logOutput = ($errorLines -join "`n")
+            } else {
+                $logOutput = '    [keine Fehler gefunden]'
+            }
+        } catch {
+            $logOutput = "    [Log-Datei nicht lesbar: ${logFile}]"
+        }
+    } else {
+        $logOutput = "    [Log-Datei nicht gefunden: ${logFile}]"
+    }
+
+    # --- Output (plain text, no colors) ---
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+
+    Write-Host @"
+
+=== Hablará Diagnose-Report ===
+
+System:
+  OS:           ${osVersion} (${arch})
+  RAM:          ${ramTotalGB} GB (${ramFreeGB} GB verfügbar)
+  Speicher:     ${freeDiskGB} GB frei
+  Shell:        PowerShell ${shellVersion}
+
+Ollama:
+  Version:      ${ollamaVersion}
+  Server:       ${serverStatus}
+  API-URL:      ${OllamaApiUrl}
+  GPU:          ${gpuLabel}
+
+Hablará-Modelle:
+${modelsOutput}
+Speicher (Hablará):  ~${totalStorageGB} GB
+
+Ollama-Log (letzte Fehler):
+${logOutput}
+
+---
+Erstellt: ${timestamp}
+Script:   setup-ollama-win.ps1 v${ScriptVersion}
+
+"@
 }
 
 # ============================================================================
@@ -484,6 +656,7 @@ Parameter:
   -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
   -Update            Hablará-Modell aktualisieren
   -Status            Ollama-Installation prüfen (Health-Check)
+  -Diagnose          Support-Report für GitHub Issues generieren
   -Cleanup           Hablará-Modelle aufräumen (nur interaktiv)
   -Help              Diese Hilfe anzeigen
 
@@ -498,6 +671,7 @@ Beispiele:
   .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
   .\setup-ollama-win.ps1 -Update      # Hablará-Modell aktualisieren
   .\setup-ollama-win.ps1 -Status      # Installation prüfen
+  .\setup-ollama-win.ps1 -Diagnose    # Support-Report generieren
   .\setup-ollama-win.ps1 -Cleanup     # Hablará-Modelle aufräumen
 "@ | Write-Host
 }
@@ -528,13 +702,15 @@ function Show-MainMenu {
     Write-Host ""
     Write-Host "  1) Ollama einrichten oder aktualisieren"
     Write-Host "  2) Status prüfen"
-    Write-Host "  3) Modelle aufräumen"
+    Write-Host "  3) Diagnose (Support-Report)"
+    Write-Host "  4) Modelle aufräumen"
     Write-Host ""
-    $choice = Read-Host "Auswahl [1-3, Enter=1]"
+    $choice = Read-Host "Auswahl [1-4, Enter=1]"
 
     switch ($choice) {
         '2' { return 'status' }
-        '3' { return 'cleanup' }
+        '3' { return 'diagnose' }
+        '4' { return 'cleanup' }
         default { return 'setup' }
     }
 }
@@ -544,6 +720,7 @@ function Select-ModelConfig {
 
     if ($Help) { Show-HelpMessage; exit 0 }
     if ($Status) { $exitCode = Invoke-StatusCheck; exit $exitCode }
+    if ($Diagnose) { Invoke-DiagnoseReport; exit 0 }
     if ($Cleanup) { $exitCode = Invoke-Cleanup; exit ($exitCode -as [int]) }
 
     $hasExplicitFlags = $Update -or (-not [string]::IsNullOrEmpty($RequestedModel))
@@ -554,6 +731,9 @@ function Select-ModelConfig {
         if ($action -eq 'status') {
             $exitCode = Invoke-StatusCheck
             exit $exitCode
+        } elseif ($action -eq 'diagnose') {
+            Invoke-DiagnoseReport
+            exit 0
         } elseif ($action -eq 'cleanup') {
             $exitCode = Invoke-Cleanup
             exit ($exitCode -as [int])

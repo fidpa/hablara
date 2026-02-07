@@ -44,6 +44,7 @@ End-User Dokumentation fuer Hablará: Guides (Recording, Storage, FAQ), Referenc
 | Aufnahme-Qualität optimieren | [guides/RECORDING_QUALITY.md](./guides/RECORDING_QUALITY.md) |
 | Aufnahmen verwalten | [guides/STORAGE.md](./guides/STORAGE.md) |
 | Häufige Probleme lösen | [guides/FAQ.md](./guides/FAQ.md) |
+| Ollama einrichten | [reference/OLLAMA_SETUP.md](./reference/OLLAMA_SETUP.md) |
 | Hotkeys konfigurieren | [reference/HOTKEYS.md](./reference/HOTKEYS.md) |
 | Rechtliche Informationen | [legal/](./legal/) |
 
@@ -60,6 +61,7 @@ docs/
 │   ├── FAQ.md                 # 10 häufigste Probleme
 │   └── LINUX_TROUBLESHOOTING.md  # Ubuntu/Linux Troubleshooting
 ├── reference/             # Reference – Technische Details
+│   ├── OLLAMA_SETUP.md        # Ollama Setup Scripts (CLI-Referenz)
 │   └── HOTKEYS.md             # Tastenkürzel & Konfiguration
 └── legal/                 # Rechtliches – Privacy, Lizenzen, Support
     ├── PRIVACY.md
@@ -80,6 +82,7 @@ docs/
 
 ## Reference
 
+- [Ollama Setup Scripts](./reference/OLLAMA_SETUP.md) - CLI-Referenz für `--status`, `--diagnose`, `--cleanup`, Modell-Varianten
 - [Hotkeys konfigurieren](./reference/HOTKEYS.md) - Tastenkürzel anpassen, Konflikte vermeiden
 
 ---
