@@ -127,10 +127,10 @@ set_version_readme() {
     # 1. Badge: version-X.Y.Z-blue
     sed "${sed_i[@]}" "s/version-[0-9][0-9.]*-blue/version-$new_version-blue/g" "$file"
 
-    # 2. Filenames in install commands: hablara_X.Y.Z_ and hablara-X.Y.Z-
-    #    (underscore/hyphen before version, NOT "v" prefix = not historical)
-    sed "${sed_i[@]}" "s/hablara_${old_version}_/hablara_${new_version}_/g" "$file"
-    sed "${sed_i[@]}" "s/hablara-${old_version}-/hablara-${new_version}-/g" "$file"
+    # 2. Filenames in install commands: Hablara_X.Y.Z_ and Hablara-X.Y.Z.
+    #    Capital H matches actual CI artifact names (Hablara_1.1.4_amd64.deb, Hablara-1.1.4.x86_64.rpm)
+    sed "${sed_i[@]}" "s/Hablara_${old_version}_/Hablara_${new_version}_/g" "$file"
+    sed "${sed_i[@]}" "s/Hablara-${old_version}\./Hablara-${new_version}./g" "$file"
 
     # 3. Footer: **Version:** X.Y.Z
     sed "${sed_i[@]}" "s/\*\*Version:\*\* ${old_version}/\*\*Version:\*\* ${new_version}/g" "$file"
@@ -180,7 +180,7 @@ fi
 log_success "Working directory: $PROJECT_ROOT"
 
 DEPS_OK=true
-for dep in node npm cargo; do
+for dep in node pnpm cargo; do
     check_dependency "$dep" && log_success "$dep found" || DEPS_OK=false
 done
 command -v jq &> /dev/null && log_success "jq found" || log_warn "jq not found - using sed fallback"
@@ -279,7 +279,7 @@ fi
 log_step "Running tests"
 
 log_info "Frontend tests..."
-if npm test --prefix "$PROJECT_ROOT" -- --run 2>/dev/null; then
+if pnpm --dir "$PROJECT_ROOT" test -- --run 2>/dev/null; then
     log_success "Frontend tests passed"
 else
     log_error "Frontend tests failed"; exit 3
