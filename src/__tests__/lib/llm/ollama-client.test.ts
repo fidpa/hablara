@@ -658,6 +658,86 @@ Was genau stört dich?`;
       });
     });
 
+    describe("JSON Format Parameter (Constrained Decoding)", () => {
+      it("should send format: 'json' for analyzeEmotion", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            response: JSON.stringify({ primary: "neutral", confidence: 0.5, markers: [] }),
+          }),
+        });
+
+        await client.analyzeEmotion("Dies ist ein Testtext für Emotionen.");
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+        expect(callBody.format).toBe("json");
+      });
+
+      it("should send format: 'json' for analyzeArgument", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            response: JSON.stringify({ fallacies: [], enrichment: "" }),
+          }),
+        });
+
+        await client.analyzeArgument("Dies ist ein längerer Testtext für die Argumentation.");
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+        expect(callBody.format).toBe("json");
+      });
+
+      it("should send format: 'json' for classifyTopic", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            response: JSON.stringify({ topic: "other", confidence: 0.5, keywords: [] }),
+          }),
+        });
+
+        await client.classifyTopic("Dies ist ein Testtext für die Kategorisierung.");
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+        expect(callBody.format).toBe("json");
+      });
+
+      it("should NOT send format: 'json' for generateChatSummary (expects Markdown)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            response: "**Emotions-Analyse**\nTest.",
+          }),
+        });
+
+        await client.generateChatSummary("Test text", { primary: "neutral", confidence: 0.5 }, []);
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+        expect(callBody.format).toBeUndefined();
+      });
+
+      it("should NOT send format: 'json' for generateChat (expects natural language)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            response: "Das ist eine natürliche Antwort.",
+          }),
+        });
+
+        await client.generateChat([
+          { role: "system", content: "Du bist ein Assistent." },
+          { role: "user", content: "Was ist Hablará?" },
+        ]);
+
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+        expect(callBody.format).toBeUndefined();
+      });
+    });
+
     describe("Malformed Response Handling", () => {
       it("should handle non-JSON response", async () => {
         mockFetch.mockResolvedValueOnce({

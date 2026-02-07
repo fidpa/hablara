@@ -81,7 +81,7 @@ export class AnthropicClient extends BaseLLMClient {
   // Provider-Specific Implementation
   // ============================================================================
 
-  protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal): Promise<string> {
+  protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal, _format?: string): Promise<string> {
     const apiKey = await this.ensureAPIKey();
 
     // Combine user-provided signal with timeout signal (prevents infinite hang)

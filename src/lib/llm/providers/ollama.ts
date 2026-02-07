@@ -89,7 +89,7 @@ export class OllamaClient extends BaseLLMClient {
   // Provider-Specific Implementation
   // ============================================================================
 
-  protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal): Promise<string> {
+  protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal, format?: string): Promise<string> {
     if (signal?.aborted) throw new Error("Request aborted before starting");
 
     // Combine user-provided signal with timeout (compatible with older WebView2)
@@ -103,6 +103,7 @@ export class OllamaClient extends BaseLLMClient {
           model: this.model,
           prompt,
           stream: false,
+          ...(format && { format }),
           options: {
             temperature: LLM_GENERATION_PARAMS.temperature,
             top_p: LLM_GENERATION_PARAMS.topP,

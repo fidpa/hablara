@@ -70,8 +70,9 @@ export abstract class BaseLLMClient implements LLMClient {
    * @param prompt - Complete prompt (system + user combined for Ollama, separate for others)
    * @param maxTokens - Maximum tokens to generate
    * @param signal - Abort signal for cancellation
+   * @param format - Response format constraint ("json" for structured analysis, undefined for natural language)
    */
-  protected abstract _generate(prompt: string, maxTokens: number, signal?: AbortSignal): Promise<string>;
+  protected abstract _generate(prompt: string, maxTokens: number, signal?: AbortSignal, format?: string): Promise<string>;
 
   /**
    * Check if LLM service is available (abstract)
@@ -137,7 +138,7 @@ export abstract class BaseLLMClient implements LLMClient {
     try {
       // escapePromptText() sanitizes user input against prompt injection
       const prompt = EMOTION_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.emotion, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.emotion, signal, "json");
       const parsed = parseJsonResponse<EmotionAnalysisResponse>(response, DEFAULT_RESPONSES.emotion);
 
       return {
@@ -166,7 +167,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = CEG_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.argument, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.argument, signal, "json");
       const parsed = parseJsonResponse<ArgumentAnalysisResponse>(response, DEFAULT_RESPONSES.argument);
 
       const fallacies: Fallacy[] =
@@ -209,7 +210,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = TONE_ANALYSIS_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.tone, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.tone, signal, "json");
       const parsed = parseJsonResponse<ToneAnalysisResponse>(response, DEFAULT_RESPONSES.tone);
 
       const clamp = (val: number | undefined, def: number) => Math.max(1, Math.min(5, val ?? def));
@@ -247,7 +248,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = GFK_ANALYSIS_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.gfk, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.gfk, signal, "json");
       const parsed = parseJsonResponse<GFKAnalysisResponse>(response, DEFAULT_RESPONSES.gfk);
 
       return {
@@ -279,7 +280,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = COGNITIVE_DISTORTION_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.cognitive, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.cognitive, signal, "json");
       const parsed = parseJsonResponse<CognitiveDistortionResponse>(response, DEFAULT_RESPONSES.cognitive);
 
       const distortions =
@@ -315,7 +316,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = FOUR_SIDES_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.fourSides, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.fourSides, signal, "json");
       const parsed = parseJsonResponse<FourSidesResponse>(response, DEFAULT_RESPONSES.fourSides);
 
       return {
@@ -345,7 +346,7 @@ export abstract class BaseLLMClient implements LLMClient {
 
     try {
       const prompt = TOPIC_CLASSIFICATION_PROMPT.replace("{text}", escapePromptText(text));
-      const response = await this._generate(prompt, TOKEN_BUDGETS.topic, signal);
+      const response = await this._generate(prompt, TOKEN_BUDGETS.topic, signal, "json");
       const parsed = parseJsonResponse<TopicClassificationResponse>(response, DEFAULT_RESPONSES.topic);
 
       return {

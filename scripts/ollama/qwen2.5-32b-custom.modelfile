@@ -33,17 +33,16 @@ PARAMETER top_p 0.9
 # Repeat Penalty: Verhindert Halluzination-Loops
 PARAMETER repeat_penalty 1.1
 
-# System Message: Hablará-Context
-SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+# System Message: Hablará-Context (V2 - format-neutral, JSON via API-Parameter)
+SYSTEM """Du bist ein KI-Assistent für die Hablará Voice Intelligence Platform.
 
 Deine Aufgaben:
-1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
-2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
-3. JSON Output: Antworte IMMER in gültigem JSON-Format
+1. Textanalyse: Emotionen, Argumente, Tonalität und psychologische Muster erkennen
+2. Wissensassistenz: Fragen zu Hablará-Features beantworten
 
 Wichtig:
 - Sei präzise und objektiv
 - Berücksichtige deutschen Sprachgebrauch und Kultur
-- Gib strukturierte Antworten (JSON Schema)
+- Folge dem im Prompt angegebenen Antwortformat (JSON oder natürliche Sprache)
 - Keine Halluzinationen oder erfundene Details
 """

@@ -9,6 +9,7 @@
 .EXAMPLE
     .\setup-ollama-win.ps1
     .\setup-ollama-win.ps1 -Model 3b
+    .\setup-ollama-win.ps1 -Update
 
 .NOTES
     Exit Codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
@@ -19,6 +20,8 @@ param(
     [Parameter(Position = 0)]
     [ValidateSet('3b', '7b', '14b', '32b')]
     [string]$Model,
+
+    [switch]$Update,
 
     [switch]$Help
 )
@@ -184,10 +187,11 @@ function Show-HelpMessage {
     @"
 Hablará Ollama Quick-Setup v$ScriptVersion
 
-Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Help]
+Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Help]
 
 Parameter:
   -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
+  -Update            Custom-Modell aktualisieren (bei App-Updates)
   -Help              Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -199,6 +203,7 @@ Modell-Varianten:
 Beispiele:
   .\setup-ollama-win.ps1              # Interaktiv oder Standard (7b)
   .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
+  .\setup-ollama-win.ps1 -Update      # Custom-Modell aktualisieren
 "@ | Write-Host
 }
 
@@ -288,8 +293,8 @@ function Test-Prerequisites {
     }
 
     $freeSpace = Get-FreeDiskSpaceGB
-    if ($freeSpace -lt $RequiredDiskSpaceGB) {
-        Write-Err "Nicht genügend Speicher: ${freeSpace}GB verfügbar, ${RequiredDiskSpaceGB}GB benötigt"
+    if ($freeSpace -lt $script:RequiredDiskSpaceGB) {
+        Write-Err "Nicht genügend Speicher: ${freeSpace}GB verfügbar, $($script:RequiredDiskSpaceGB)GB benötigt"
         exit 2
     }
     Write-Success "Speicherplatz: ${freeSpace}GB verfügbar"
@@ -408,19 +413,19 @@ function Install-Ollama {
 
 function Install-BaseModel {
     Write-Step "Lade Basis-Modell herunter..."
-    Write-Info "Prüfe Modell: $ModelName"
+    Write-Info "Prüfe Modell: $script:ModelName"
 
-    if (Test-OllamaModelExists $ModelName) {
-        Write-Success "Modell bereits vorhanden: $ModelName"
+    if (Test-OllamaModelExists $script:ModelName) {
+        Write-Success "Modell bereits vorhanden: $script:ModelName"
         return
     }
 
-    Write-Info "Lade $ModelName ($ModelSize, dauert mehrere Minuten je nach Verbindung)..."
+    Write-Info "Lade $script:ModelName ($script:ModelSize, dauert mehrere Minuten je nach Verbindung)..."
     Write-Info "Tipp: Bei Abbruch (Ctrl+C) setzt ein erneuter Start den Download fort"
 
     $pullSuccess = $false
     for ($attempt = 1; $attempt -le 3; $attempt++) {
-        & ollama pull $ModelName
+        & ollama pull $script:ModelName
         if ($LASTEXITCODE -eq 0) { $pullSuccess = $true; break }
         if ($attempt -lt 3) {
             Write-Warn "Download fehlgeschlagen, Versuch $($attempt + 1)/3..."
@@ -430,25 +435,48 @@ function Install-BaseModel {
 
     if (-not $pullSuccess) {
         Write-Err "Modell-Download fehlgeschlagen nach 3 Versuchen"
-        Write-Info "Manuell versuchen: ollama pull $ModelName"
+        Write-Info "Manuell versuchen: ollama pull $script:ModelName"
         exit 1
     }
-    Write-Success "Modell heruntergeladen: $ModelName"
+    Write-Success "Modell heruntergeladen: $script:ModelName"
 }
 
 function New-CustomModel {
     Write-Step "Erstelle Custom-Modell..."
-    Write-Info "Prüfe Custom-Modell: $CustomModelName"
+    Write-Info "Prüfe Custom-Modell: $script:CustomModelName"
 
-    if (Test-OllamaModelExists $CustomModelName) {
-        Write-Success "Custom-Modell bereits vorhanden"
-        return
+    $actionVerb = "erstellt"
+
+    if (Test-OllamaModelExists $script:CustomModelName) {
+        if ($Update) {
+            Write-Info "Aktualisiere bestehendes Custom-Modell..."
+            $actionVerb = "aktualisiert"
+        } elseif (Test-InteractiveSession) {
+            # Interaktiv: Menü anzeigen
+            Write-Host ""
+            Write-Info "Custom-Modell $script:CustomModelName bereits vorhanden."
+            Write-Host ""
+            Write-Host "  1) Überspringen (keine Änderung)"
+            Write-Host "  2) Modell aktualisieren (empfohlen bei App-Updates)"
+            Write-Host ""
+            $updateChoice = Read-Host "Auswahl [1-2, Enter=1]"
+            if ($updateChoice -ne '2') {
+                Write-Success "Custom-Modell beibehalten"
+                return
+            }
+            Write-Info "Aktualisiere bestehendes Custom-Modell..."
+            $actionVerb = "aktualisiert"
+        } else {
+            # Nicht-interaktiv ohne -Update: überspringen (bisheriges Verhalten)
+            Write-Success "Custom-Modell bereits vorhanden"
+            return
+        }
     }
 
     Write-Info "Erstelle optimiertes Custom-Modell..."
 
     # Dynamic modelfile path based on selected model variant (e.g. qwen2.5:7b → qwen2.5-7b-custom.modelfile)
-    $modelfileName = ($ModelName -replace ':', '-') + "-custom.modelfile"
+    $modelfileName = ($script:ModelName -replace ':', '-') + "-custom.modelfile"
     $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { "" }
     $externalModelfile = if ($scriptDir) { Join-Path $scriptDir "ollama\$modelfileName" } else { "" }
 
@@ -465,24 +493,23 @@ function New-CustomModel {
     if (-not $modelfileContent) {
         Write-Info "Kein spezifisches Modelfile gefunden, verwende generisches"
         $modelfileContent = @"
-FROM $ModelName
+FROM $script:ModelName
 
 PARAMETER num_ctx 8192
 PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.1
 
-SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+SYSTEM """Du bist ein KI-Assistent für die Hablará Voice Intelligence Platform.
 
 Deine Aufgaben:
-1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
-2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
-3. JSON Output: Antworte IMMER in gültigem JSON-Format
+1. Textanalyse: Emotionen, Argumente, Tonalität und psychologische Muster erkennen
+2. Wissensassistenz: Fragen zu Hablará-Features beantworten
 
 Wichtig:
 - Sei präzise und objektiv
 - Berücksichtige deutschen Sprachgebrauch und Kultur
-- Gib strukturierte Antworten (JSON Schema)
+- Folge dem im Prompt angegebenen Antwortformat (JSON oder natürliche Sprache)
 - Keine Halluzinationen oder erfundene Details
 """
 "@
@@ -513,12 +540,12 @@ Wichtig:
     } catch { Write-Warn "Konnte restriktive Berechtigungen nicht setzen: $_" }
 
     try {
-        & ollama create $CustomModelName -f $modelfilePath
+        & ollama create $script:CustomModelName -f $modelfilePath
         if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Custom-Modell Erstellung fehlgeschlagen - verwende Basis-Modell"
+            Write-Warn "Custom-Modell konnte nicht ${actionVerb} werden - verwende Basis-Modell"
             return
         }
-        Write-Success "Custom-Modell erstellt: $CustomModelName"
+        Write-Success "Custom-Modell ${actionVerb}: $script:CustomModelName"
         Write-Info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
     } finally {
         if (Test-Path $modelfilePath) { Remove-Item -Path $modelfilePath -Force -ErrorAction SilentlyContinue }
@@ -538,13 +565,13 @@ function Test-Installation {
     try { $null = Invoke-RestMethod -Uri "$OllamaApiUrl/api/version" -TimeoutSec 5 }
     catch { Write-Err "Ollama Server nicht erreichbar"; return $false }
 
-    if (-not (Test-OllamaModelExists $ModelName)) { Write-Err "Basis-Modell nicht gefunden: $ModelName"; return $false }
-    Write-Success "Basis-Modell verfügbar: $ModelName"
+    if (-not (Test-OllamaModelExists $script:ModelName)) { Write-Err "Basis-Modell nicht gefunden: $script:ModelName"; return $false }
+    Write-Success "Basis-Modell verfügbar: $script:ModelName"
 
-    $testModel = $ModelName
-    if (Test-OllamaModelExists $CustomModelName) {
-        Write-Success "Custom-Modell verfügbar: $CustomModelName"
-        $testModel = $CustomModelName
+    $testModel = $script:ModelName
+    if (Test-OllamaModelExists $script:CustomModelName) {
+        Write-Success "Custom-Modell verfügbar: $script:CustomModelName"
+        $testModel = $script:CustomModelName
     } else {
         Write-Warn "Custom-Modell nicht verfügbar (verwende Basis-Modell)"
     }
@@ -579,7 +606,7 @@ function Main {
     Write-Host "  2. Drücke Ctrl+Shift+D für erste Aufnahme"
     Write-Host "  3. Mikrofon-Berechtigung erlauben (einmalig)"
     Write-Host ""
-    $finalModel = if (Test-OllamaModelExists $CustomModelName) { $CustomModelName } else { $ModelName }
+    $finalModel = if (Test-OllamaModelExists $script:CustomModelName) { $script:CustomModelName } else { $script:ModelName }
 
     Write-Host "LLM-Einstellungen in der App:" -ForegroundColor Yellow
     Write-Host "  - Provider: Ollama (Standard)"

@@ -24,6 +24,7 @@ CUSTOM_MODEL_NAME=""
 MODEL_SIZE=""
 REQUIRED_DISK_SPACE_GB=0
 RAM_WARNING=""
+FORCE_UPDATE=false
 
 # Model config lookup (Bash 3.2 compatible - no associative arrays)
 # Returns: model_name|download_size|disk_gb|ram_warning_gb
@@ -207,6 +208,7 @@ Verwendung: $0 [OPTIONEN]
 
 Optionen:
   -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
+  --update              Custom-Modell aktualisieren (bei App-Updates)
   -h, --help            Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -218,7 +220,9 @@ Modell-Varianten:
 Beispiele:
   $0                    # Interaktiv oder Standard (7b)
   $0 --model 3b         # 3b-Modell verwenden
+  $0 --update           # Custom-Modell aktualisieren
   curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
+  curl -fsSL URL | bash -s -- --update  # Update via Pipe
 EOF
 }
 
@@ -266,6 +270,7 @@ select_model() {
       -m|--model)
         [[ -z "${2:-}" ]] && { log_error "Option $1 benötigt ein Argument"; exit 1; }
         requested_model="$2"; shift 2 ;;
+      --update) FORCE_UPDATE=true; shift ;;
       -h|--help) show_help; exit 0 ;;
       *) log_error "Unbekannte Option: $1"; exit 1 ;;
     esac
@@ -507,9 +512,36 @@ create_custom_model() (
   log_step "Erstelle Custom-Modell..."
   log_info "Prüfe Custom-Modell: ${CUSTOM_MODEL_NAME}"
 
+  local action_verb="erstellt"
+
   if ollama_model_exists "${CUSTOM_MODEL_NAME}"; then
-    log_success "Custom-Modell bereits vorhanden"
-    return 0
+    # FORCE_UPDATE from parent scope (subshell copy; changes don't propagate back)
+    if [[ "$FORCE_UPDATE" == "true" ]]; then
+      log_info "Aktualisiere bestehendes Custom-Modell..."
+      action_verb="aktualisiert"
+    elif exec 3<>/dev/tty; then
+      # Interaktiv: Menü über FD3 (TTY), damit stderr-Redirect den Prompt nicht versteckt
+      printf "\n" >&3
+      printf "    • Custom-Modell %s bereits vorhanden.\n" "${CUSTOM_MODEL_NAME}" >&3
+      printf "\n" >&3
+      printf "  1) Überspringen (keine Änderung)\n" >&3
+      printf "  2) Modell aktualisieren (empfohlen bei App-Updates)\n" >&3
+      printf "\n" >&3
+      printf "Auswahl [1-2, Enter=1]: " >&3
+      local update_choice
+      IFS= read -r -t 30 update_choice <&3 || update_choice=""
+      exec 3>&- 3<&-
+      if [[ "$update_choice" != "2" ]]; then
+        log_success "Custom-Modell beibehalten"
+        return 0
+      fi
+      log_info "Aktualisiere bestehendes Custom-Modell..."
+      action_verb="aktualisiert"
+    else
+      # Kein nutzbares TTY → wie non-interaktiv behandeln (Skip)
+      log_success "Custom-Modell bereits vorhanden"
+      return 0
+    fi
   fi
 
   log_info "Erstelle optimiertes Custom-Modell..."
@@ -542,17 +574,16 @@ PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER repeat_penalty 1.1
 
-SYSTEM """Du bist ein KI-Assistent für emotionale und argumentative Textanalyse.
+SYSTEM """Du bist ein KI-Assistent für die Hablará Voice Intelligence Platform.
 
 Deine Aufgaben:
-1. Emotion Analysis: Erkenne die primäre Emotion in gesprochenen Texten (Deutsch)
-2. Fallacy Detection: Identifiziere logische Fehlschlüsse in Argumenten
-3. JSON Output: Antworte IMMER in gültigem JSON-Format
+1. Textanalyse: Emotionen, Argumente, Tonalität und psychologische Muster erkennen
+2. Wissensassistenz: Fragen zu Hablará-Features beantworten
 
 Wichtig:
 - Sei präzise und objektiv
 - Berücksichtige deutschen Sprachgebrauch und Kultur
-- Gib strukturierte Antworten (JSON Schema)
+- Folge dem im Prompt angegebenen Antwortformat (JSON oder natürliche Sprache)
 - Keine Halluzinationen oder erfundene Details
 """
 EOF
@@ -562,11 +593,11 @@ EOF
   ollama create "${CUSTOM_MODEL_NAME}" -f "${modelfile}" || create_result=$?
 
   if [[ $create_result -ne 0 ]]; then
-    log_warn "Custom-Modell Erstellung fehlgeschlagen - verwende Basis-Modell"
+    log_warn "Custom-Modell konnte nicht ${action_verb} werden - verwende Basis-Modell"
     return 0
   fi
 
-  log_success "Custom-Modell erstellt: ${CUSTOM_MODEL_NAME}"
+  log_success "Custom-Modell ${action_verb}: ${CUSTOM_MODEL_NAME}"
   log_info "Accuracy-Boost: 80% -> 93% (Emotion Detection)"
 )
 
