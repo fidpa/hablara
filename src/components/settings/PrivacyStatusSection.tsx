@@ -122,7 +122,7 @@ export function PrivacyStatusSection({
         <div className="space-y-2 pl-6">
           <div>
             <span className="font-medium">Audio-Aufnahmen:</span>{" "}
-            <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+            <code className="text-xs bg-muted px-1.5 py-0.5 rounded break-all">
               {storagePath || DEFAULT_STORAGE_PATH}
             </code>
           </div>

@@ -41,7 +41,7 @@ jobs:
   build-windows:
     name: Build Windows x64 (v${{ inputs.version }})
     runs-on: windows-latest
-    timeout-minutes: 45  # Includes whisper.cpp compilation and 1.62 GB model download
+    timeout-minutes: 55  # Includes whisper.cpp compilation, 1.62 GB model download, and Rust cache upload on miss
 
     steps:
       - name: Checkout code

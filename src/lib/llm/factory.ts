@@ -15,7 +15,7 @@ import type { LLMError } from "./error-types";
 const DEFAULT_LLM_CONFIG: LLMConfig = {
   provider: "ollama",
   model: "qwen2.5:7b-custom",
-  baseUrl: "http://localhost:11434",
+  baseUrl: "http://127.0.0.1:11434",
 };
 
 // Singleton pattern for LLM client

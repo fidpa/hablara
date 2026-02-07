@@ -7,8 +7,9 @@
  * Shows platform-specific terminal commands (bash/PowerShell).
  */
 
-import { useCallback } from "react";
-import { isTauri, isWindows } from "@/lib/utils";
+import { useCallback, useState, useRef, useEffect } from "react";
+import { Copy, Check } from "lucide-react";
+import { isTauri, isWindows, isMacOS } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { LLMProviderStatus } from "@/lib/types";
 
@@ -25,10 +26,14 @@ export function OllamaTroubleshootingSection({
   providerStatus,
   model,
 }: OllamaTroubleshootingSectionProps): JSX.Element | null {
-  // Only show for offline or model-missing states
-  if (providerStatus !== "offline" && providerStatus !== "model-missing") {
-    return null;
-  }
+  const [isCopied, setIsCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   // Open external URL (Tauri-safe)
   const openExternalUrl = useCallback(async (url: string): Promise<void> => {
@@ -44,12 +49,35 @@ export function OllamaTroubleshootingSection({
     }
   }, []);
 
+  // Only show for offline or model-missing states
+  if (providerStatus !== "offline" && providerStatus !== "model-missing") {
+    return null;
+  }
+
+  const handleCopy = async (text: string) => {
+    try {
+      if (isTauri()) {
+        const { writeText } = await import("@tauri-apps/plugin-clipboard-manager");
+        await writeText(text);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      setIsCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      logger.error("OllamaTroubleshootingSection", "Copy failed", error);
+    }
+  };
+
   // Generate terminal command based on model and platform
   const getTerminalCommand = (): string => {
     if (model.includes("custom")) {
-      return isWindows()
-        ? 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-win.ps1" -OutFile "$env:TEMP\\setup-ollama-win.ps1"; & "$env:TEMP\\setup-ollama-win.ps1"'
-        : "curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-linux.sh | bash";
+      if (isWindows()) {
+        return 'Invoke-WebRequest -Uri "https://raw.githubusercontent.com/fidpa/hablara/main/scripts/setup-ollama-win.ps1" -OutFile "$env:TEMP\\setup-ollama-win.ps1"; & "$env:TEMP\\setup-ollama-win.ps1"';
+      }
+      const script = isMacOS() ? "setup-ollama-mac.sh" : "setup-ollama-linux.sh";
+      return `curl -fsSL https://raw.githubusercontent.com/fidpa/hablara/main/scripts/${script} | bash`;
     }
     return `ollama pull ${model}`;
   };
@@ -79,9 +107,30 @@ export function OllamaTroubleshootingSection({
         </p>
       )}
 
-      <p className="text-slate-500 dark:text-slate-400">
-        2. Terminal öffnen und Befehl ausführen:
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-slate-500 dark:text-slate-400">
+          2. Terminal öffnen und Befehl ausführen:
+        </p>
+        <button
+          type="button"
+          onClick={() => handleCopy(getTerminalCommand())}
+          className="flex items-center gap-1 px-2 py-0.5 rounded text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+          aria-label="Befehl kopieren"
+          title="In Zwischenablage kopieren"
+        >
+          {isCopied ? (
+            <>
+              <Check className="w-3 h-3 text-green-500" />
+              <span>Kopiert</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" />
+              <span>Kopieren</span>
+            </>
+          )}
+        </button>
+      </div>
       <div className="bg-black p-2 rounded font-mono text-slate-600 dark:text-slate-300 select-all overflow-x-auto whitespace-nowrap">
         {getTerminalCommand()}
       </div>

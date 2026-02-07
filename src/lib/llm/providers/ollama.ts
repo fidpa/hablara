@@ -23,6 +23,40 @@ import { corsSafeFetch } from "../helpers/tauri-fetch";
 
 // MLX_INVOKE_TIMEOUT imported from types.ts
 
+/**
+ * Create timeout AbortController compatible with older WebView2 versions.
+ * Uses AbortController + setTimeout instead of AbortSignal.timeout() (Chrome 103+)
+ * and AbortSignal.any() (Chrome 116+) which may not be available in all environments.
+ */
+function createTimeoutController(ms: number, externalSignal?: AbortSignal): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+
+  let onExternalAbort: (() => void) | null = null;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+      clearTimeout(timeoutId);
+      return { signal: controller.signal, cleanup: () => {} };
+    }
+    onExternalAbort = () => controller.abort();
+    externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeoutId);
+      if (onExternalAbort && externalSignal) {
+        externalSignal.removeEventListener("abort", onExternalAbort);
+      }
+    },
+  };
+}
+
 export class OllamaClient extends BaseLLMClient {
   private baseUrl: string;
   private useMlx: boolean;
@@ -31,7 +65,11 @@ export class OllamaClient extends BaseLLMClient {
 
   constructor(config: LLMConfig & { onError?: (error: LLMError) => void; timeoutMs?: number }) {
     super("ollama", config.model, config.onError);
-    this.baseUrl = config.baseUrl || "http://localhost:11434";
+    // Normalize localhost → 127.0.0.1 to avoid IPv6 DNS resolution issues on Windows
+    // Windows 11 resolves "localhost" to ::1 (IPv6) first, but Ollama only listens on 127.0.0.1
+    // See: https://github.com/tauri-apps/plugins-workspace/issues/3239
+    const rawUrl = config.baseUrl || "http://127.0.0.1:11434";
+    this.baseUrl = rawUrl.replace("://localhost", "://127.0.0.1");
     this.useMlx = config.useMlx || false;
     this.timeoutMs = config.timeoutMs ?? DEFAULT_LLM_TIMEOUTS.ollama;
     this.mlxPaths = {
@@ -54,11 +92,8 @@ export class OllamaClient extends BaseLLMClient {
   protected async _generate(prompt: string, maxTokens: number, signal?: AbortSignal): Promise<string> {
     if (signal?.aborted) throw new Error("Request aborted before starting");
 
-    // Combine user-provided signal with timeout signal (prevents infinite hang)
-    const timeoutSignal = AbortSignal.timeout(this.timeoutMs);
-    const combinedSignal = signal
-      ? AbortSignal.any([signal, timeoutSignal])
-      : timeoutSignal;
+    // Combine user-provided signal with timeout (compatible with older WebView2)
+    const { signal: combinedSignal, cleanup } = createTimeoutController(this.timeoutMs, signal);
 
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/generate`, {
@@ -77,6 +112,8 @@ export class OllamaClient extends BaseLLMClient {
         signal: combinedSignal,
       }, "OllamaClient");
 
+      cleanup();
+
       if (!response.ok) {
         const rawError = await response.text();
         throw new Error(`Ollama API error ${response.status}: ${rawError.slice(0, 200)}`);
@@ -84,8 +121,9 @@ export class OllamaClient extends BaseLLMClient {
       const data = await response.json();
       return data.response;
     } catch (error: unknown) {
-      // Enhanced error message for timeout
-      if (error instanceof Error && error.name === "TimeoutError") {
+      cleanup();
+      // Enhanced error message for timeout (AbortError from our manual controller)
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
         throw new Error(`Ollama timeout after ${this.timeoutMs / 1000}s - Server möglicherweise überlastet oder nicht erreichbar`);
       }
       throw error;
@@ -93,13 +131,18 @@ export class OllamaClient extends BaseLLMClient {
   }
 
   async isAvailable(): Promise<boolean> {
+    const { signal, cleanup } = createTimeoutController(LLM_LOCAL_HEALTH_CHECK_TIMEOUT);
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
-        signal: AbortSignal.timeout(LLM_LOCAL_HEALTH_CHECK_TIMEOUT),
+        signal,
       }, "OllamaClient");
+      cleanup();
       return response.ok;
-    } catch {
+    } catch (error: unknown) {
+      cleanup();
+      const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      logger.warn("OllamaClient", `isAvailable check failed for ${this.baseUrl}: ${msg}`);
       return false;
     }
   }
@@ -109,17 +152,21 @@ export class OllamaClient extends BaseLLMClient {
    * @returns Object with server availability and model existence
    */
   async verifyModelStatus(): Promise<{ available: boolean; modelExists: boolean }> {
+    const { signal, cleanup } = createTimeoutController(LLM_LOCAL_HEALTH_CHECK_TIMEOUT);
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
-        signal: AbortSignal.timeout(LLM_LOCAL_HEALTH_CHECK_TIMEOUT),
+        signal,
       }, "OllamaClient");
 
       if (!response.ok) {
+        cleanup();
+        logger.warn("OllamaClient", `Health check returned HTTP ${response.status} for ${this.baseUrl}`);
         return { available: false, modelExists: false };
       }
 
       const data = await response.json();
+      cleanup();
       const models = data.models || [];
 
       // Check if configured model exists (exact match or with tag suffix)
@@ -129,7 +176,10 @@ export class OllamaClient extends BaseLLMClient {
       );
 
       return { available: true, modelExists };
-    } catch {
+    } catch (error: unknown) {
+      cleanup();
+      const msg = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      logger.error("OllamaClient", `Health check failed for ${this.baseUrl}/api/tags: ${msg}`);
       return { available: false, modelExists: false };
     }
   }

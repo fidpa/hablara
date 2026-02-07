@@ -214,7 +214,7 @@ describe('types.ts - Type Definitions', () => {
     it('should have valid LLM config', () => {
       expect(DEFAULT_SETTINGS.llm.provider).toBe('ollama');
       expect(DEFAULT_SETTINGS.llm.model).toBe('qwen2.5:7b-custom');
-      expect(DEFAULT_SETTINGS.llm.baseUrl).toBe('http://localhost:11434');
+      expect(DEFAULT_SETTINGS.llm.baseUrl).toBe('http://127.0.0.1:11434');
       expect(DEFAULT_SETTINGS.llm.useMlx).toBe(false);
     });
 

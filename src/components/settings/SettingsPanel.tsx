@@ -185,7 +185,7 @@ export function SettingsPanel({ open, onOpenChange, settings, onSettingsChange, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Einstellungen</DialogTitle>
           <DialogDescription>
@@ -193,7 +193,7 @@ export function SettingsPanel({ open, onOpenChange, settings, onSettingsChange, 
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="allgemein" className="w-full">
+        <Tabs defaultValue="allgemein" className="w-full min-w-0">
           <TabsList className="grid w-full grid-cols-5" aria-label="Einstellungskategorien">
             <TabsTrigger value="allgemein">Allgemein</TabsTrigger>
             <TabsTrigger value="analyse">Analyse</TabsTrigger>

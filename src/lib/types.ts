@@ -6,7 +6,7 @@
  * Single source of truth for version display across the app.
  * Must be kept in sync with package.json version.
  */
-export const APP_VERSION = "1.1.2" as const;
+export const APP_VERSION = "1.1.3" as const;
 
 /**
  * Application developer information.
@@ -647,7 +647,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   llm: {
     provider: "ollama",
     model: "qwen2.5:7b-custom", // Custom-optimized Qwen 2.5 7B (see docs/how-to/LLM_SETUP.md)
-    baseUrl: "http://localhost:11434",
+    baseUrl: "http://127.0.0.1:11434",
     useMlx: false, // Ollama Default (persistent server, 2-4s). MLX optional für Power-User (siehe ADR-019)
   },
   whisperModel: "german-turbo",
@@ -1245,7 +1245,7 @@ export const DEFAULT_LLM_TIMEOUTS: Record<LLMProvider, number> = {
 
 // LLM Health Check & Special Timeouts
 export const LLM_HEALTH_CHECK_TIMEOUT = 5000; // 5s for cloud provider availability checks
-export const LLM_LOCAL_HEALTH_CHECK_TIMEOUT = 2000; // 2s for Ollama /api/tags check
+export const LLM_LOCAL_HEALTH_CHECK_TIMEOUT = 5000; // 5s for Ollama /api/tags check (increased from 2s for Windows IPv6 DNS fallback)
 export const MLX_INVOKE_TIMEOUT = 30000; // 30s for MLX subprocess calls (MLX is faster than Ollama CPU inference)
 
 // ============================================

@@ -114,7 +114,7 @@ export default function AudioRecorder({
   // Recreate AnalysisPipeline when LLM settings change (Whisper-Pattern)
   const currentLlmProvider = settings?.llm?.provider ?? "ollama";
   const currentLlmModel = settings?.llm?.model ?? "qwen2.5:7b-custom";
-  const currentLlmBaseUrl = settings?.llm?.baseUrl ?? "http://localhost:11434";
+  const currentLlmBaseUrl = settings?.llm?.baseUrl ?? "http://127.0.0.1:11434";
   const currentLlmApiKey = settings?.llm?.apiKey ?? "";
 
   if (
