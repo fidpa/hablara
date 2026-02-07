@@ -26,6 +26,7 @@ REQUIRED_DISK_SPACE_GB=0
 RAM_WARNING=""
 FORCE_UPDATE=false
 STATUS_CHECK_MODE=false
+CLEANUP_MODE=false
 
 # Model config lookup (Bash 3.2 compatible - no associative arrays)
 # Returns: model_name|download_size|disk_gb|ram_warning_gb
@@ -209,7 +210,7 @@ wait_for_ollama() {
 
 cleanup() {
   local exit_code=$?
-  if [[ $exit_code -ne 0 && "$STATUS_CHECK_MODE" == "false" ]]; then
+  if [[ $exit_code -ne 0 && "$STATUS_CHECK_MODE" == "false" && "$CLEANUP_MODE" == "false" ]]; then
     log_error "Setup fehlgeschlagen"
   fi
 }
@@ -369,6 +370,124 @@ run_status_check() {
 }
 
 # ============================================================================
+# Cleanup
+# ============================================================================
+
+run_cleanup() {
+  CLEANUP_MODE=true
+  STATUS_CHECK_MODE=true  # Suppress EXIT trap error message
+
+  if [[ ! -r /dev/tty ]]; then
+    log_error "--cleanup erfordert eine interaktive Sitzung"
+    exit 1
+  fi
+
+  if ! command_exists ollama; then
+    log_error "Ollama nicht gefunden"
+    exit 1
+  fi
+
+  if ! ollama list &>/dev/null; then
+    log_error "Ollama Server nicht erreichbar"
+    log_info "Starte Ollama und versuche es erneut"
+    exit 1
+  fi
+
+  # Discover installed Hablará variants
+  local variants=() variant_labels=()
+  local variant
+  for variant in 3b 7b 14b 32b; do
+    local config_line
+    config_line=$(get_model_config "$variant") || continue
+    local model_name="${config_line%%|*}"
+    local custom_name="${model_name}-custom"
+    local has_base=false has_custom=false
+
+    ollama_model_exists "$model_name" && has_base=true
+    ollama_model_exists "$custom_name" && has_custom=true
+
+    if $has_base && $has_custom; then
+      variants+=("${variant}|${model_name}|${custom_name}|both")
+      variant_labels+=("${variant}  (${model_name} + ${custom_name})")
+    elif $has_base; then
+      variants+=("${variant}|${model_name}||base")
+      variant_labels+=("${variant}  (${model_name})")
+    elif $has_custom; then
+      variants+=("${variant}||${custom_name}|custom")
+      variant_labels+=("${variant}  (${custom_name})")
+    fi
+  done
+
+  if [[ ${#variants[@]} -eq 0 ]]; then
+    echo ""
+    log_info "Keine Hablará-Modelle gefunden."
+    echo ""
+    return 0
+  fi
+
+  echo ""
+  echo -e "${COLOR_CYAN}Installierte Hablará-Varianten:${COLOR_RESET}"
+  echo ""
+  local i
+  for i in "${!variant_labels[@]}"; do
+    echo "  $((i + 1))) ${variant_labels[$i]}"
+  done
+  echo ""
+  echo -n "Welche Variante löschen? (Nummer, Enter=abbrechen): "
+
+  local choice
+  read -r choice </dev/tty || choice=""
+
+  # Empty = abort
+  if [[ -z "$choice" ]]; then
+    return 0
+  fi
+
+  # Validate choice
+  if ! [[ "$choice" =~ ^[0-9]+$ ]] || [[ "$choice" -lt 1 || "$choice" -gt ${#variants[@]} ]]; then
+    log_error "Ungültige Auswahl"
+    return 1
+  fi
+
+  local selected="${variants[$((choice - 1))]}"
+  local sel_variant sel_base sel_custom sel_type
+  IFS='|' read -r sel_variant sel_base sel_custom sel_type <<< "$selected"
+
+  echo ""
+
+  # Delete custom first (depends on base)
+  local rm_err
+  if [[ -n "$sel_custom" ]]; then
+    rm_err=$(ollama rm "$sel_custom" 2>&1) && log_success "${sel_custom} gelöscht" \
+      || log_warn "${sel_custom} konnte nicht gelöscht werden: ${rm_err:-unbekannter Fehler}"
+  fi
+
+  if [[ -n "$sel_base" ]]; then
+    rm_err=$(ollama rm "$sel_base" 2>&1) && log_success "${sel_base} gelöscht" \
+      || log_warn "${sel_base} konnte nicht gelöscht werden: ${rm_err:-unbekannter Fehler}"
+  fi
+
+  # Check if any Hablará models remain
+  local remaining=false
+  for variant in 3b 7b 14b 32b; do
+    local config_line
+    config_line=$(get_model_config "$variant") || continue
+    local model_name="${config_line%%|*}"
+    if ollama_model_exists "$model_name" || ollama_model_exists "${model_name}-custom"; then
+      remaining=true
+      break
+    fi
+  done
+
+  if ! $remaining; then
+    echo ""
+    log_warn "Keine Hablará-Modelle mehr installiert. Führe das Setup erneut aus, um ein Modell zu installieren."
+  fi
+
+  echo ""
+}
+
+# ============================================================================
 # Model Selection
 # ============================================================================
 
@@ -382,6 +501,7 @@ Optionen:
   -m, --model VARIANTE  Modell-Variante wählen (3b, 7b, 14b, 32b)
   --update              Hablará-Modell aktualisieren
   --status              Ollama-Installation prüfen (Health-Check)
+  --cleanup             Hablará-Modelle aufräumen (nur interaktiv)
   -h, --help            Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -395,6 +515,7 @@ Beispiele:
   $0 --model 3b         # 3b-Modell verwenden
   $0 --update           # Hablará-Modell aktualisieren
   $0 --status           # Installation prüfen
+  $0 --cleanup          # Hablará-Modelle aufräumen
   curl -fsSL URL | bash -s -- -m 14b  # Pipe mit Argument
   curl -fsSL URL | bash -s -- --update  # Update via Pipe
 EOF
@@ -442,13 +563,15 @@ show_main_menu() {
   echo "" >&2
   echo "  1) Ollama einrichten oder aktualisieren" >&2
   echo "  2) Status prüfen" >&2
+  echo "  3) Modelle aufräumen" >&2
   echo "" >&2
-  echo -n "Auswahl [1-2, Enter=1]: " >&2
+  echo -n "Auswahl [1-3, Enter=1]: " >&2
 
   local choice
   read -r choice </dev/tty || choice=""
   case "$choice" in
     2) echo "status" ;;
+    3) echo "cleanup" ;;
     *) echo "setup" ;;
   esac
 }
@@ -464,6 +587,7 @@ select_model() {
         requested_model="$2"; has_explicit_flags=true; shift 2 ;;
       --update) FORCE_UPDATE=true; has_explicit_flags=true; shift ;;
       --status) local _rc=0; run_status_check || _rc=$?; exit $_rc ;;
+      --cleanup) run_cleanup; exit $? ;;
       -h|--help) show_help; exit 0 ;;
       *) log_error "Unbekannte Option: $1"; exit 1 ;;
     esac
@@ -475,6 +599,8 @@ select_model() {
     action=$(show_main_menu) || action="setup"
     if [[ "$action" == "status" ]]; then
       local _rc=0; run_status_check || _rc=$?; exit $_rc
+    elif [[ "$action" == "cleanup" ]]; then
+      run_cleanup; exit $?
     fi
   fi
 

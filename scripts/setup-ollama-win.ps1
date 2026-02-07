@@ -11,6 +11,7 @@
     .\setup-ollama-win.ps1 -Model 3b
     .\setup-ollama-win.ps1 -Update
     .\setup-ollama-win.ps1 -Status
+    .\setup-ollama-win.ps1 -Cleanup
 
 .NOTES
     Exit Codes: 0=Success, 1=Error, 2=Disk space, 3=Network, 4=Platform
@@ -25,6 +26,8 @@ param(
     [switch]$Update,
 
     [switch]$Status,
+
+    [switch]$Cleanup,
 
     [switch]$Help
 )
@@ -347,6 +350,127 @@ function Invoke-StatusCheck {
 }
 
 # ============================================================================
+# Cleanup
+# ============================================================================
+
+function Invoke-Cleanup {
+    if (-not (Test-InteractiveSession)) {
+        Write-Err "-Cleanup erfordert eine interaktive Sitzung"
+        exit 1
+    }
+
+    if (-not (Test-CommandExists 'ollama')) {
+        Write-Err "Ollama nicht gefunden"
+        exit 1
+    }
+
+    try {
+        $null = & ollama list 2>$null
+        if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
+    } catch {
+        Write-Err "Ollama Server nicht erreichbar"
+        Write-Info "Starte Ollama und versuche es erneut"
+        exit 1
+    }
+
+    # Discover installed Hablará variants
+    $variants = @()
+    foreach ($variant in @('3b', '7b', '14b', '32b')) {
+        $modelName = $ModelConfigs[$variant].Name
+        $customName = "${modelName}-custom"
+        $hasBase = Test-OllamaModelExists $modelName
+        $hasCustom = Test-OllamaModelExists $customName
+
+        if ($hasBase -and $hasCustom) {
+            $variants += @{ Variant = $variant; Base = $modelName; Custom = $customName; Label = "${variant}  (${modelName} + ${customName})" }
+        } elseif ($hasBase) {
+            $variants += @{ Variant = $variant; Base = $modelName; Custom = $null; Label = "${variant}  (${modelName})" }
+        } elseif ($hasCustom) {
+            $variants += @{ Variant = $variant; Base = $null; Custom = $customName; Label = "${variant}  (${customName})" }
+        }
+    }
+
+    if ($variants.Count -eq 0) {
+        Write-Host ""
+        Write-Info "Keine Hablará-Modelle gefunden."
+        Write-Host ""
+        return
+    }
+
+    Write-Host ""
+    Write-Host "Installierte Hablará-Varianten:" -ForegroundColor Cyan
+    Write-Host ""
+    for ($i = 0; $i -lt $variants.Count; $i++) {
+        Write-Host "  $($i + 1)) $($variants[$i].Label)"
+    }
+    Write-Host ""
+    $choice = Read-Host "Welche Variante löschen? (Nummer, Enter=abbrechen)"
+
+    # Empty = abort
+    if ([string]::IsNullOrEmpty($choice)) {
+        return
+    }
+
+    # Validate choice
+    $choiceNum = 0
+    if (-not [int]::TryParse($choice, [ref]$choiceNum) -or $choiceNum -lt 1 -or $choiceNum -gt $variants.Count) {
+        Write-Err "Ungültige Auswahl"
+        return 1
+    }
+
+    $selected = $variants[$choiceNum - 1]
+
+    Write-Host ""
+
+    # Delete custom first (depends on base)
+    if ($selected.Custom) {
+        try {
+            $rmErr = & ollama rm $selected.Custom 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "$($selected.Custom) gelöscht"
+            } else {
+                $reason = if ($rmErr) { $rmErr } else { 'unbekannter Fehler' }
+                Write-Warn "$($selected.Custom) konnte nicht gelöscht werden: $reason"
+            }
+        } catch {
+            Write-Warn "$($selected.Custom) konnte nicht gelöscht werden: $_"
+        }
+    }
+
+    if ($selected.Base) {
+        try {
+            $rmErr = & ollama rm $selected.Base 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "$($selected.Base) gelöscht"
+            } else {
+                $reason = if ($rmErr) { $rmErr } else { 'unbekannter Fehler' }
+                Write-Warn "$($selected.Base) konnte nicht gelöscht werden: $reason"
+            }
+        } catch {
+            Write-Warn "$($selected.Base) konnte nicht gelöscht werden: $_"
+        }
+    }
+
+    # Check if any Hablará models remain
+    $remaining = $false
+    foreach ($variant in @('3b', '7b', '14b', '32b')) {
+        $modelName = $ModelConfigs[$variant].Name
+        if ((Test-OllamaModelExists $modelName) -or (Test-OllamaModelExists "${modelName}-custom")) {
+            $remaining = $true
+            break
+        }
+    }
+
+    if (-not $remaining) {
+        Write-Host ""
+        Write-Warn "Keine Hablará-Modelle mehr installiert. Führe das Setup erneut aus, um ein Modell zu installieren."
+    }
+
+    Write-Host ""
+    return 0
+}
+
+# ============================================================================
 # Model Selection
 # ============================================================================
 
@@ -354,12 +478,13 @@ function Show-HelpMessage {
     @"
 Hablará Ollama Setup für Windows v$ScriptVersion
 
-Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Status] [-Help]
+Verwendung: .\setup-ollama-win.ps1 [-Model <Variante>] [-Update] [-Status] [-Cleanup] [-Help]
 
 Parameter:
   -Model <Variante>  Modell-Variante wählen (3b, 7b, 14b, 32b)
   -Update            Hablará-Modell aktualisieren
   -Status            Ollama-Installation prüfen (Health-Check)
+  -Cleanup           Hablará-Modelle aufräumen (nur interaktiv)
   -Help              Diese Hilfe anzeigen
 
 Modell-Varianten:
@@ -373,6 +498,7 @@ Beispiele:
   .\setup-ollama-win.ps1 -Model 3b    # 3b-Modell verwenden
   .\setup-ollama-win.ps1 -Update      # Hablará-Modell aktualisieren
   .\setup-ollama-win.ps1 -Status      # Installation prüfen
+  .\setup-ollama-win.ps1 -Cleanup     # Hablará-Modelle aufräumen
 "@ | Write-Host
 }
 
@@ -402,11 +528,13 @@ function Show-MainMenu {
     Write-Host ""
     Write-Host "  1) Ollama einrichten oder aktualisieren"
     Write-Host "  2) Status prüfen"
+    Write-Host "  3) Modelle aufräumen"
     Write-Host ""
-    $choice = Read-Host "Auswahl [1-2, Enter=1]"
+    $choice = Read-Host "Auswahl [1-3, Enter=1]"
 
     switch ($choice) {
         '2' { return 'status' }
+        '3' { return 'cleanup' }
         default { return 'setup' }
     }
 }
@@ -416,6 +544,7 @@ function Select-ModelConfig {
 
     if ($Help) { Show-HelpMessage; exit 0 }
     if ($Status) { $exitCode = Invoke-StatusCheck; exit $exitCode }
+    if ($Cleanup) { $exitCode = Invoke-Cleanup; exit ($exitCode -as [int]) }
 
     $hasExplicitFlags = $Update -or (-not [string]::IsNullOrEmpty($RequestedModel))
 
@@ -425,6 +554,9 @@ function Select-ModelConfig {
         if ($action -eq 'status') {
             $exitCode = Invoke-StatusCheck
             exit $exitCode
+        } elseif ($action -eq 'cleanup') {
+            $exitCode = Invoke-Cleanup
+            exit ($exitCode -as [int])
         }
     }
 
