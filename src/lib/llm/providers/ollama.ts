@@ -63,6 +63,15 @@ export class OllamaClient extends BaseLLMClient {
   private mlxPaths: { pythonPath: string; modelsDir: string };
   private timeoutMs: number;
 
+  /**
+   * Default headers for all Ollama requests.
+   * Origin header prevents 403 from Ollama in Tauri production builds
+   * where WebView2 sends "Origin: tauri://localhost" which Ollama rejects.
+   */
+  private get defaultHeaders(): Record<string, string> {
+    return { "Origin": "http://localhost" };
+  }
+
   constructor(config: LLMConfig & { onError?: (error: LLMError) => void; timeoutMs?: number }) {
     super("ollama", config.model, config.onError);
     // Normalize localhost → 127.0.0.1 to avoid IPv6 DNS resolution issues on Windows
@@ -98,7 +107,7 @@ export class OllamaClient extends BaseLLMClient {
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...this.defaultHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.model,
           prompt,
@@ -136,6 +145,7 @@ export class OllamaClient extends BaseLLMClient {
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
+        headers: this.defaultHeaders,
         signal,
       }, "OllamaClient");
       cleanup();
@@ -157,6 +167,7 @@ export class OllamaClient extends BaseLLMClient {
     try {
       const response = await corsSafeFetch(`${this.baseUrl}/api/tags`, {
         method: "GET",
+        headers: this.defaultHeaders,
         signal,
       }, "OllamaClient");
 
